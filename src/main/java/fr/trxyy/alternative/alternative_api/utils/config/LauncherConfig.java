@@ -8,6 +8,7 @@ import java.util.Map.Entry;
 
 import org.json.simple.JSONObject;
 import org.json.simple.JSONValue;
+
 import fr.trxyy.alternative.alternative_api.GameEngine;
 import fr.trxyy.alternative.alternative_api.utils.Logger;
 import fr.trxyy.alternative.alternative_api.utils.file.JsonUtil;
@@ -25,18 +26,28 @@ public class LauncherConfig {
 	 * @param engine The GameEngine instance
 	 */
 	public LauncherConfig(GameEngine engine) {
-		this.configVersion = ConfigVersion.getInstance();
 		this.gameEngine = engine;
-		this.launcherConfig = new File(System.getProperty("user.home") + "\\AppData\\Roaming\\launcher_config.json");
+		String osName = System.getProperty("os.name").toLowerCase();
+		//Pas propre mais temporaire
+		if (osName.contains("win")) {
+			this.launcherConfig = new File(System.getProperty("user.home") + "\\AppData\\Roaming\\launcher_config.json");
+		}
+		else if (osName.contains("mac")) {
+			this.launcherConfig = new File(System.getProperty("user.home") + "/Library/Application Support/launcher_config.json");
+		}
+		else if (osName.contains("linux") || osName.contains("unix") || osName.contains("solaris") || osName.contains("sunos")) {
+			this.launcherConfig = new File(System.getProperty("user.home") + "/launcher_config.json");
+		}
+		else {
+			this.launcherConfig = new File(System.getProperty("user.home") + "/launcher_config.json");
+		}
 
 		if (!this.launcherConfig.exists()) {
 			try {
 				this.launcherConfig.createNewFile();
 			} catch (IOException e) {
 				e.printStackTrace();
-				
 			}
-			
 
 			/**
 			 * Config details
@@ -82,7 +93,6 @@ public class LauncherConfig {
 			e.printStackTrace();
 		}
 	}
-	
 	
 	/**
 	 * Update multiple values in the config json
