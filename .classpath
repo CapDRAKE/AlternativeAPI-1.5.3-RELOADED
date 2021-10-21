@@ -8,5 +8,6 @@
 	<classpathentry kind="lib" path="src/main/resources/javafx-mx.jar"/>
 	<classpathentry kind="lib" path="src/main/resources/jfxrt.jar"/>
 	<classpathentry kind="lib" path="src/main/resources/jfxswt.jar"/>
+	<classpathentry kind="lib" path="src/main/resources/guava-15.0.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

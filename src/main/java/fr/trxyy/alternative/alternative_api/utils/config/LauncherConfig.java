@@ -53,19 +53,19 @@ public class LauncherConfig {
 			 * Config details
 			 */
 			JSONObject configDetails = new JSONObject();
-			configDetails.put("username", "PLAYER");
-			configDetails.put("password", "");
-			configDetails.put("allocatedram", 2.0);
-			configDetails.put("version", "");
-			configDetails.put("useforge", true);
-			configDetails.put("usediscord", true);
-			configDetails.put("usemusic", true);
-			configDetails.put("rememberme", false);
-			configDetails.put("gamesize", "0");
-			configDetails.put("autologin", false);
-			configDetails.put("vmarguments", "-XX:+CMSIncrementalMode");
-			configDetails.put("usevmarguments", false);
-			configDetails.put("usePremium", false);
+			configDetails.put(EnumConfig.USERNAME.getOption(), EnumConfig.USERNAME.getDefault());
+			configDetails.put(EnumConfig.RAM.getOption(), EnumConfig.RAM.getDefault());
+			configDetails.put(EnumConfig.GAME_SIZE.getOption(), EnumConfig.GAME_SIZE.getDefault());
+			configDetails.put(EnumConfig.AUTOLOGIN.getOption(), false);
+			configDetails.put(EnumConfig.VM_ARGUMENTS.getOption(), EnumConfig.VM_ARGUMENTS.getDefault());
+			configDetails.put(EnumConfig.USE_VM_ARGUMENTS.getOption(), false);
+			configDetails.put(EnumConfig.USE_DISCORD.getOption(), true);
+			configDetails.put(EnumConfig.USE_MUSIC.getOption(), true);
+			configDetails.put(EnumConfig.REMEMBER_ME.getOption(), false);
+			configDetails.put(EnumConfig.VERSION.getOption(), EnumConfig.VERSION.getDefault());
+			configDetails.put(EnumConfig.USE_FORGE.getOption(), true);
+			configDetails.put(EnumConfig.USE_PREMIUM.getOption(), false);
+			configDetails.put(EnumConfig.PASSWORD.getOption(), EnumConfig.PASSWORD.getDefault());
 
 			try {
 				FileWriter fw = new FileWriter(this.launcherConfig);
@@ -117,10 +117,10 @@ public class LauncherConfig {
 	/**
 	 * Get a specified value
 	 */
-	public Object getValue(String toGet) {
+	public Object getValue(EnumConfig option) {
 		String configJson = JsonUtil.getGson().toJson(this.configVersion);
 		JSONObject jsonObject = (JSONObject) JSONValue.parse(configJson);
-		return jsonObject.get(toGet);
+		return jsonObject.get(option.getOption());
 	}
 
 	/**

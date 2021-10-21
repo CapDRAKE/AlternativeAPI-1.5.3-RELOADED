@@ -18,7 +18,7 @@ import fr.trxyy.alternative.alternative_api.GameForge;
 import fr.trxyy.alternative.alternative_api.GameStyle;
 import fr.trxyy.alternative.alternative_api.minecraft.json.Argument;
 import fr.trxyy.alternative.alternative_api.minecraft.json.ArgumentType;
-import fr.trxyy.alternative.alternative_api.utils.HastebinSender;
+import fr.trxyy.alternative.alternative_api.minecraft.utils.EnumJavaVersion;
 import fr.trxyy.alternative.alternative_api.utils.Logger;
 import fr.trxyy.alternative.alternative_api.utils.OperatingSystem;
 import fr.trxyy.alternative.alternative_api.utils.file.FileUtil;
@@ -88,18 +88,9 @@ public class GameRunner {
 			process.waitFor();
 			int exitVal = process.exitValue();
 			if (exitVal != 0) {
-		        HastebinSender hastebin = new HastebinSender();
-		        String crashUrl = "";
-				try {
-					crashUrl = hastebin.postError(Logger.getLines(), false);
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
 				Logger.log("\n\n");
 				Logger.log("========================================");
 				Logger.log("|         Minecraft has crashed.       |");
-				Logger.log("|  Your crash report is available at:  |");
-				Logger.log("|  " + crashUrl + "  |");
 				Logger.log("========================================");
 			}
 		} catch (IOException e) {
@@ -126,7 +117,37 @@ public class GameRunner {
 	private ArrayList<String> getLaunchCommand() {
 		ArrayList<String> commands = new ArrayList<String>();
 		OperatingSystem os = OperatingSystem.getCurrentPlatform();
-        commands.add(OperatingSystem.getJavaPath());
+        
+		
+		if (this.engine.isOnline()) {
+			if (this.engine.getMinecraftVersion().getJavaVersion() != null) {
+				String component = this.engine.getMinecraftVersion().getJavaVersion().getComponent();
+				if (component.equals(EnumJavaVersion.JAVA_RUNTIME_ALPHA.getCode())) {
+					commands.add(OperatingSystem.getJavaPath(this.engine));
+				} else if (component.equals(EnumJavaVersion.JRE_LEGACY.getCode())) {
+					commands.add(OperatingSystem.getJavaPath(this.engine));
+				} else {
+					commands.add(OperatingSystem.getJavaPath());
+				}
+			} else {
+				commands.add(OperatingSystem.getJavaPath());
+			}
+		}
+		else {
+			if (this.engine.getGameUpdater().getLocalVersion().getJavaVersion() != null) {
+				String component = this.engine.getGameUpdater().getLocalVersion().getJavaVersion().getComponent();
+				if (component.equals(EnumJavaVersion.JAVA_RUNTIME_ALPHA.getCode())) {
+					commands.add(OperatingSystem.getJavaPath(this.engine));
+				} else if (component.equals(EnumJavaVersion.JRE_LEGACY.getCode())) {
+					commands.add(OperatingSystem.getJavaPath(this.engine));
+				} else {
+					commands.add(OperatingSystem.getJavaPath());
+				}
+			} else {
+				commands.add(OperatingSystem.getJavaPath());
+			}
+		}
+		
         commands.add("-XX:-UseAdaptiveSizePolicy");
 		
 		if (engine.getJVMArguments() != null) {
@@ -137,9 +158,33 @@ public class GameRunner {
 			commands.add("-Xdock:name=Minecraft");
 			commands.add("-Xdock:icon=" + engine.getGameFolder().getAssetsDir() + "icons/minecraft.icns");
 		} else if (os.equals(OperatingSystem.WINDOWS)) {
-			commands.add("-XX:+UseConcMarkSweepGC");
+			if (!(this.engine.getMinecraftVersion().getJavaVersion() != null)) {
+				commands.add("-XX:+UseConcMarkSweepGC");
+			}
 			commands.add("-XX:HeapDumpPath=MojangTricksIntelDriversForPerformance_javaw.exe_minecraft.exe.heapdump");
 		}
+		
+		if (this.engine.isOnline()) {
+			if (this.engine.getMinecraftVersion().getJavaVersion() != null) {
+				commands.add("-XX:+UnlockExperimentalVMOptions");
+				commands.add("-XX:+UseG1GC");
+				commands.add("-XX:G1NewSizePercent=20");
+				commands.add("-XX:G1ReservePercent=20");
+				commands.add("-XX:MaxGCPauseMillis=50");
+				commands.add("-XX:G1HeapRegionSize=32M");
+			}
+		}
+		else {
+			if (this.engine.getGameUpdater().getLocalVersion().getJavaVersion() != null) {
+				commands.add("-XX:+UnlockExperimentalVMOptions");
+				commands.add("-XX:+UseG1GC");
+				commands.add("-XX:G1NewSizePercent=20");
+				commands.add("-XX:G1ReservePercent=20");
+				commands.add("-XX:MaxGCPauseMillis=50");
+				commands.add("-XX:G1HeapRegionSize=32M");
+			}
+		}
+		
 		commands.add("-Djava.library.path=" + engine.getGameFolder().getNativesDir().getAbsolutePath());
 		commands.add("-Dfml.ignoreInvalidMinecraftCertificates=true");
 		commands.add("-Dfml.ignorePatchDiscrepancies=true");
