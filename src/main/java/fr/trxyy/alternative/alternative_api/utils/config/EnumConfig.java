@@ -2,6 +2,7 @@ package fr.trxyy.alternative.alternative_api.utils.config;
 
 public enum EnumConfig {
 	
+	TOKEN("token",""),
 	USERNAME("username", "Player"),
 	VERSION("version", ""),
 	RAM("allocatedram", 1.0),
@@ -13,6 +14,7 @@ public enum EnumConfig {
 	USE_DISCORD("usediscord", true),
 	USE_FORGE("useforge", true),
 	USE_PREMIUM("usePremium", false),
+	USE_MICROSOFT("useMicrosoft", false),
 	PASSWORD("password", ""),
 	REMEMBER_ME("rememberme", false);
 	

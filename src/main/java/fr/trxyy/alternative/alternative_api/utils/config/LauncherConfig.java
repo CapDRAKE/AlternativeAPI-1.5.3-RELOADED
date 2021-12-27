@@ -54,11 +54,13 @@ public class LauncherConfig {
 			 */
 			JSONObject configDetails = new JSONObject();
 			configDetails.put(EnumConfig.USERNAME.getOption(), EnumConfig.USERNAME.getDefault());
+			configDetails.put(EnumConfig.TOKEN.getOption(), EnumConfig.TOKEN.getDefault());
 			configDetails.put(EnumConfig.RAM.getOption(), EnumConfig.RAM.getDefault());
 			configDetails.put(EnumConfig.GAME_SIZE.getOption(), EnumConfig.GAME_SIZE.getDefault());
 			configDetails.put(EnumConfig.AUTOLOGIN.getOption(), false);
 			configDetails.put(EnumConfig.VM_ARGUMENTS.getOption(), EnumConfig.VM_ARGUMENTS.getDefault());
 			configDetails.put(EnumConfig.USE_VM_ARGUMENTS.getOption(), false);
+			configDetails.put(EnumConfig.USE_MICROSOFT.getOption(), false);
 			configDetails.put(EnumConfig.USE_DISCORD.getOption(), true);
 			configDetails.put(EnumConfig.USE_MUSIC.getOption(), true);
 			configDetails.put(EnumConfig.REMEMBER_ME.getOption(), false);

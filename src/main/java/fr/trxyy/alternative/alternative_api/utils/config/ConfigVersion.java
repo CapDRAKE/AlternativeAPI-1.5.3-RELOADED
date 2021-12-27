@@ -8,6 +8,10 @@ public class ConfigVersion {
 	/**
 	 * The username
 	 */
+	public String token;
+	/**
+	 * The username
+	 */
 	public String username;
 	/**
 	 * The password
@@ -43,6 +47,10 @@ public boolean usemusic;
 /* Using premium ?
  */
 public boolean usePremium;
+/* Using microsoft ?
+ */
+public boolean useMicrosoft;
+
 	 /* The game size
 	 */
 	public String gamesize;
@@ -64,6 +72,7 @@ public boolean usePremium;
 	 */
 	public ConfigVersion(ConfigVersion o) {
 		instance = o;
+		this.token = o.token;
 		this.username = o.username;
 		this.allocatedram = o.allocatedram;
 		this.version = o.version;
@@ -74,10 +83,18 @@ public boolean usePremium;
 		this.autologin = o.autologin;
 		this.vmarguments = o.vmarguments;
 		this.usevmarguments = o.usevmarguments;
+		this.useMicrosoft = o.useMicrosoft;
 		this.password = o.password;
 		this.rememberme = o.rememberme;
 		this.usePremium = o.usePremium;
 
+	}
+	
+	/**
+	 * Update token in config json
+	 */
+	public String getToken() {
+		return this.token;
 	}
 
 	/**
@@ -142,6 +159,10 @@ public boolean usePremium;
 		return this.usePremium;
 	}
 	
+	public boolean useMicrosoft() {
+		return this.useMicrosoft;
+	}
+	
 	public boolean isRememberme() {
 		return rememberme;
 	}
@@ -149,5 +170,4 @@ public boolean usePremium;
 	public static ConfigVersion getInstance() {
 		return instance;
 	}
-	
 }
