@@ -31,12 +31,18 @@ public class ConfigVersion {
 	  public String version;
 	/**usePremium
 	 * 
-	 /* Using forge ?
+	 /* Using optifine ?
 	  */
-	  public boolean useforge;
+	  public boolean useOptifine;
 	  /*
 	   * 
 	   */
+	  /* Using optifine ?
+		  */
+		  public boolean useforge;
+		  /*
+		   * 
+		   */
 		 /* Using discord ?
 		  */
     public boolean usediscord;
@@ -76,6 +82,7 @@ public boolean useMicrosoft;
 		this.username = o.username;
 		this.allocatedram = o.allocatedram;
 		this.version = o.version;
+		this.useOptifine = o.useOptifine;
 		this.useforge = o.useforge;
 		this.usediscord = o.usediscord;
 		this.usemusic = o.usemusic;
@@ -140,6 +147,11 @@ public boolean useMicrosoft;
 	 */
 	public boolean useVMArguments() {
 		return this.usevmarguments;
+	}
+	
+	public boolean useOptifine() 
+	{
+		return this.useOptifine;
 	}
 	
 	public boolean useForge() 
