@@ -9,6 +9,7 @@ import fr.trxyy.alternative.alternative_api.utils.file.GameUtils;
  */
 public class GameFolder {
 	
+	public String location;
 	/**
 	 * The main game directory
 	 */
@@ -55,6 +56,7 @@ public class GameFolder {
 	 * @param location The folder name (inside APPDATA, if minecraft = .minecraft; if myserver = .myserver)
 	 */
 	public GameFolder(String location) {
+		this.location = location;
 		this.gameDir = GameUtils.getWorkingDirectory(location);
 		this.binDir = new File(this.gameDir, "bin");
 		this.playDir = new File(this.gameDir, "bin" + File.separator + "game");
@@ -85,6 +87,9 @@ public class GameFolder {
 		return this.log_configsDir;
 	}
 
+	public String getLocation() {
+        return location;
+    }
 	/**
 	 * @return The game directory
 	 */
