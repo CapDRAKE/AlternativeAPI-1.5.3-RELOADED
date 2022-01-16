@@ -55,6 +55,7 @@ public class LauncherConfig {
 			JSONObject configDetails = new JSONObject();
 			configDetails.put(EnumConfig.USERNAME.getOption(), EnumConfig.USERNAME.getDefault());
 			configDetails.put(EnumConfig.TOKEN.getOption(), EnumConfig.TOKEN.getDefault());
+			configDetails.put(EnumConfig.UUID.getOption(), EnumConfig.UUID.getDefault());
 			configDetails.put(EnumConfig.RAM.getOption(), EnumConfig.RAM.getDefault());
 			configDetails.put(EnumConfig.GAME_SIZE.getOption(), EnumConfig.GAME_SIZE.getDefault());
 			configDetails.put(EnumConfig.AUTOLOGIN.getOption(), false);
