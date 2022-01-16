@@ -3,6 +3,7 @@ package fr.trxyy.alternative.alternative_api.utils.config;
 public enum EnumConfig {
 	
 	TOKEN("token",""),
+	UUID("uuid",""),
 	USERNAME("username", "Player"),
 	VERSION("version", ""),
 	RAM("allocatedram", 1.0),

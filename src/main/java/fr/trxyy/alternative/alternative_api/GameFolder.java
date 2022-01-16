@@ -1,6 +1,7 @@
 package fr.trxyy.alternative.alternative_api;
 
 import java.io.File;
+import java.nio.file.Path;
 
 import fr.trxyy.alternative.alternative_api.utils.file.GameUtils;
 

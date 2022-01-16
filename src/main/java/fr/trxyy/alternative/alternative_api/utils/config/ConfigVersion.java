@@ -6,7 +6,11 @@ public class ConfigVersion {
 	private static ConfigVersion instance;
 	
 	/**
-	 * The username
+	 * The UUID
+	 */
+	public String uuid;
+	/**
+	 * The token
 	 */
 	public String token;
 	/**
@@ -79,6 +83,7 @@ public boolean useMicrosoft;
 	public ConfigVersion(ConfigVersion o) {
 		instance = o;
 		this.token = o.token;
+		this.uuid = o.uuid;
 		this.username = o.username;
 		this.allocatedram = o.allocatedram;
 		this.version = o.version;
@@ -98,10 +103,17 @@ public boolean useMicrosoft;
 	}
 	
 	/**
-	 * Update token in config json
+	 * take token from config json
 	 */
 	public String getToken() {
 		return this.token;
+	}
+	
+	/**
+	 * take UUID from config json
+	 */
+	public String getUUID() {
+		return this.uuid;
 	}
 
 	/**
