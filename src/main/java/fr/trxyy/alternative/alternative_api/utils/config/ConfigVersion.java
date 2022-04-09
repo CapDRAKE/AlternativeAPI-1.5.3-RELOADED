@@ -33,15 +33,19 @@ public class ConfigVersion {
 	 * The VERSION
 	 */
 	  public String version;
-	/**usePremium
+	/**
 	 * 
 	 /* Using optifine ?
 	  */
 	  public boolean useOptifine;
-	  /*
-	   * 
-	   */
-	  /* Using optifine ?
+		/**
+		 * 
+		 /* Using connect auto ?
+		 */
+	  public boolean useConnect;
+		  
+	  
+	  /* Using Forge ?
 		  */
 		  public boolean useforge;
 		  /*
@@ -83,6 +87,7 @@ public boolean useMicrosoft;
 	public ConfigVersion(ConfigVersion o) {
 		instance = o;
 		this.token = o.token;
+		this.useConnect = o.useConnect;
 		this.uuid = o.uuid;
 		this.username = o.username;
 		this.allocatedram = o.allocatedram;
@@ -185,6 +190,10 @@ public boolean useMicrosoft;
 	
 	public boolean useMicrosoft() {
 		return this.useMicrosoft;
+	}
+	
+	public boolean useConnect() {
+		return this.useConnect;
 	}
 	
 	public boolean isRememberme() {
