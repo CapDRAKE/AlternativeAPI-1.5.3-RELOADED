@@ -17,6 +17,7 @@ public enum EnumConfig {
 	USE_FORGE("useforge", false),
 	USE_PREMIUM("usePremium", false),
 	USE_MICROSOFT("useMicrosoft", false),
+	USE_CONNECT("useConnect", false),
 	PASSWORD("password", ""),
 	REMEMBER_ME("rememberme", false);
 	

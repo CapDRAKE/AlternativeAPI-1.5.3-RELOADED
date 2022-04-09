@@ -62,6 +62,7 @@ public class LauncherConfig {
 			configDetails.put(EnumConfig.VM_ARGUMENTS.getOption(), EnumConfig.VM_ARGUMENTS.getDefault());
 			configDetails.put(EnumConfig.USE_VM_ARGUMENTS.getOption(), false);
 			configDetails.put(EnumConfig.USE_MICROSOFT.getOption(), false);
+			configDetails.put(EnumConfig.USE_CONNECT.getOption(), false);
 			configDetails.put(EnumConfig.USE_DISCORD.getOption(), true);
 			configDetails.put(EnumConfig.USE_MUSIC.getOption(), true);
 			configDetails.put(EnumConfig.REMEMBER_ME.getOption(), false);
