@@ -1,5 +1,7 @@
 package fr.trxyy.alternative.alternative_api.utils.config;
 
+import java.util.Date;
+
 public class ConfigVersion {
 
 	
@@ -80,6 +82,8 @@ public boolean useMicrosoft;
 	 * Use custom vm arguments 
 	 */
 	public boolean usevmarguments;
+	
+	public String date;
 
 	/**
 	 * The Constructor
@@ -104,7 +108,11 @@ public boolean useMicrosoft;
 		this.password = o.password;
 		this.rememberme = o.rememberme;
 		this.usePremium = o.usePremium;
-
+		this.date = o.date;
+	}
+	
+	public String getDate() {
+		return this.date;
 	}
 	
 	/**

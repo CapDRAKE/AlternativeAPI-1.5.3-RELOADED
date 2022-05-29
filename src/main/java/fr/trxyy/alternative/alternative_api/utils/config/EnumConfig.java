@@ -19,7 +19,8 @@ public enum EnumConfig {
 	USE_MICROSOFT("useMicrosoft", false),
 	USE_CONNECT("useConnect", false),
 	PASSWORD("password", ""),
-	REMEMBER_ME("rememberme", false);
+	REMEMBER_ME("rememberme", false),
+	DATE("date", "");
 	
 	public String option;
 	public Object def;

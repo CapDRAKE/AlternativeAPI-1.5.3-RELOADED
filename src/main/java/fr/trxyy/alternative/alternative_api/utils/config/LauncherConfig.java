@@ -71,6 +71,7 @@ public class LauncherConfig {
 			configDetails.put(EnumConfig.USE_OPTIFINE.getOption(), true);
 			configDetails.put(EnumConfig.USE_PREMIUM.getOption(), false);
 			configDetails.put(EnumConfig.PASSWORD.getOption(), EnumConfig.PASSWORD.getDefault());
+			configDetails.put(EnumConfig.DATE.getOption(), EnumConfig.DATE.getDefault());
 
 			try {
 				FileWriter fw = new FileWriter(this.launcherConfig);
