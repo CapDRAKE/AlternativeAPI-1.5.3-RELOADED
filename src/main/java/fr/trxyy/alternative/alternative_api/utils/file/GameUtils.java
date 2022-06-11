@@ -64,7 +64,9 @@ public class GameUtils {
 		ArrayList<File> libs = list(engine.getGameFolder().getLibsDir());
 		String separator = System.getProperty("path.separator");
 		for (File lib : libs) {
-			result += lib.getAbsolutePath() + separator;
+			if (lib.getAbsolutePath().endsWith(".jar") || lib.getAbsolutePath().endsWith(".zip")){
+				result += lib.getAbsolutePath() + separator;
+			}
 		}
 		result += engine.getGameFolder().getGameJar().getAbsolutePath();
 		return result;

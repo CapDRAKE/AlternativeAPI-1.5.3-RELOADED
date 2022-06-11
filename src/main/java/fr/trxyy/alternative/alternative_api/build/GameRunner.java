@@ -12,9 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import javax.swing.JFrame;
-import javax.swing.JOptionPane;
-
 import org.apache.commons.lang3.text.StrSubstitutor;
 
 import fr.trxyy.alternative.alternative_api.GameEngine;
@@ -24,7 +21,6 @@ import fr.trxyy.alternative.alternative_api.minecraft.json.Argument;
 import fr.trxyy.alternative.alternative_api.minecraft.json.ArgumentType;
 import fr.trxyy.alternative.alternative_api.utils.Logger;
 import fr.trxyy.alternative.alternative_api.utils.OperatingSystem;
-import fr.trxyy.alternative.alternative_api.utils.config.EnumConfig;
 import fr.trxyy.alternative.alternative_api.utils.file.FileUtil;
 import fr.trxyy.alternative.alternative_api.utils.file.GameUtils;
 import fr.trxyy.alternative.alternative_auth.account.Session;
@@ -46,9 +42,8 @@ public class GameRunner {
 
 	/**
 	 * The Constructor
-	 * 
 	 * @param gameEngine The GameEngine instance
-	 * @param account    The session
+	 * @param account The session
 	 */
 	public GameRunner(GameEngine gameEngine, Session account) {
 		this.engine = gameEngine;
@@ -71,15 +66,15 @@ public class GameRunner {
 
 	/**
 	 * Launch the game
-	 * 
 	 * @throws Exception
 	 */
-	public void launch() throws Exception {
-		ArrayList<String> commands = this.getLaunchCommand();
-		ProcessBuilder processBuilder = new ProcessBuilder(commands);
-		processBuilder.redirectInput(Redirect.INHERIT);
-		processBuilder.redirectOutput(Redirect.INHERIT);
-		processBuilder.redirectError(Redirect.INHERIT);
+    public void launch() throws Exception
+    {
+    	ArrayList<String> commands = this.getLaunchCommand();
+        ProcessBuilder processBuilder = new ProcessBuilder(commands);
+        processBuilder.redirectInput(Redirect.INHERIT);
+        processBuilder.redirectOutput(Redirect.INHERIT);
+        processBuilder.redirectError(Redirect.INHERIT);
 		processBuilder.directory(engine.getGameFolder().getGameDir());
 		processBuilder.redirectErrorStream(true);
 		String cmds = "";
@@ -91,28 +86,22 @@ public class GameRunner {
 		try {
 			Process process = processBuilder.start();
 			process.waitFor();
-
 			int exitVal = process.exitValue();
 			if (exitVal != 0) {
-				JFrame jFrame = new JFrame();
-				JOptionPane.showMessageDialog(jFrame,
-						"CRASH de Minecraft ! Il semblerait qu'il y ait un problème avec le démarrage de Minecraft.\nSi le problème survient en 1.17, merci de passer en 1.17.1. La 1.17 semble avoir des problèmes avec le launcher.\nMerci de contacter le support en cas de besoin.\nSupport : https://majestycraft.com/support");
 				Logger.log("\n\n");
 				Logger.log("========================================");
 				Logger.log("|         Minecraft has crashed.       |");
 				Logger.log("========================================");
-				System.exit(0);
 			}
 		} catch (IOException e) {
 			throw new Exception("Cannot launch !", e);
 		}
 	}
 
-	/**
-	 * Open a link
-	 * 
-	 * @param urlString The url to open
-	 */
+    /**
+     * Open a link
+     * @param urlString The url to open
+     */
 	public void openLink(String urlString) {
 		try {
 			Desktop.getDesktop().browse(new URL(urlString).toURI());
@@ -123,25 +112,27 @@ public class GameRunner {
 
 	/**
 	 * Get launch commands as a ArrayList<String>
-	 * 
 	 * @return Launch commands as a ArrayList<String>
 	 */
 	private ArrayList<String> getLaunchCommand() {
 		ArrayList<String> commands = new ArrayList<String>();
 		OperatingSystem os = OperatingSystem.getCurrentPlatform();
-
+        
+		
 		if (this.engine.isOnline()) {
 			if (this.engine.getMinecraftVersion().getJavaVersion() != null) {
 				String component = this.engine.getMinecraftVersion().getJavaVersion().getComponent();
 				if (component != null) {
 					commands.add(OperatingSystem.getJavaPath(this.engine));
-				} else {
+				}
+				else {
 					commands.add(OperatingSystem.getJavaPath());
 				}
 			} else {
 				commands.add(OperatingSystem.getJavaPath());
 			}
-		} else {
+		}
+		else {
 			if (this.engine.getGameUpdater().getLocalVersion().getJavaVersion() != null) {
 				String component = this.engine.getGameUpdater().getLocalVersion().getJavaVersion().getComponent();
 				if (component != null) {
@@ -153,12 +144,17 @@ public class GameRunner {
 				commands.add(OperatingSystem.getJavaPath());
 			}
 		}
-
-		commands.add("-XX:-UseAdaptiveSizePolicy");
-
+		
+        commands.add("-XX:-UseAdaptiveSizePolicy");
+		
 		if (engine.getJVMArguments() != null) {
 			commands.addAll(engine.getJVMArguments().getJVMArguments());
 		}
+
+		if (engine.getGameStyle().equals(GameStyle.FORGE_1_17_HIGHER)) {
+			commands.addAll(this.getForgeJVMArguments());
+		}
+		commands.add("-Dbsl.debug=True");
 
 		if (os.equals(OperatingSystem.OSX)) {
 			commands.add("-Xdock:name=Minecraft");
@@ -169,7 +165,7 @@ public class GameRunner {
 			}
 			commands.add("-XX:HeapDumpPath=MojangTricksIntelDriversForPerformance_javaw.exe_minecraft.exe.heapdump");
 		}
-
+		
 		if (this.engine.isOnline()) {
 			if (this.engine.getMinecraftVersion().getJavaVersion() != null) {
 				commands.add("-XX:+UnlockExperimentalVMOptions");
@@ -179,7 +175,8 @@ public class GameRunner {
 				commands.add("-XX:MaxGCPauseMillis=50");
 				commands.add("-XX:G1HeapRegionSize=32M");
 			}
-		} else {
+		}
+		else {
 			if (this.engine.getGameUpdater().getLocalVersion().getJavaVersion() != null) {
 				commands.add("-XX:+UnlockExperimentalVMOptions");
 				commands.add("-XX:+UseG1GC");
@@ -189,20 +186,17 @@ public class GameRunner {
 				commands.add("-XX:G1HeapRegionSize=32M");
 			}
 		}
-
+		
 		if (this.engine.getMinecraftVersion().getLogging() != null) {
-			File log4jFile = new File(this.engine.getGameFolder().getLogConfigsDir(),
-					this.engine.getMinecraftVersion().getLogging().getClient().getFile().getId());
-			commands.add(this.engine.getMinecraftVersion().getLogging().getClient().getArgument().replace("${path}",
-					log4jFile.getAbsolutePath()));
+			File log4jFile = new File(this.engine.getGameFolder().getLogConfigsDir(), this.engine.getMinecraftVersion().getLogging().getClient().getFile().getId());
+			commands.add(this.engine.getMinecraftVersion().getLogging().getClient().getArgument().replace("${path}", log4jFile.getAbsolutePath()));
 		}
-
+		
 		commands.add("-Djava.library.path=" + engine.getGameFolder().getNativesDir().getAbsolutePath());
 		commands.add("-Dfml.ignoreInvalidMinecraftCertificates=true");
 		commands.add("-Dfml.ignorePatchDiscrepancies=true");
-
-		// forge 1.18 == Resultats des tests non concluants, a regler par la suite. 1.17
-		// ready ?
+		
+		// forge 1.18 == Resultats des tests non concluants, a regler par la suite. 1.17 ready ?
 //		commands.add("-DignoreList=bootstraplauncher,securejarhandler,asm-commons,asm-util,asm-analysis,asm-tree,asm,client-extra,fmlcore,javafmllanguage,mclanguage,forge-,${version_name}.jar");
 //		commands.add("-DmergeModules=jna-5.8.0.jar,jna-platform-58.0.jar,java-objc-bridge-1.0.0.jar");
 //		commands.add("-DlibraryDirectory=" + engine.getGameFolder().getLibsDir().getAbsolutePath());
@@ -215,12 +209,12 @@ public class GameRunner {
 //		commands.add(engine.getGameFolder().getLibsDir() + "/org/ow2/asm/asm-analysis/9.1/asm-analysis-9.1.jar");
 //		commands.add(engine.getGameFolder().getLibsDir() + "/org/ow2/asm/asm-tree/9.1/asm-tree-9.1.jar");
 //		commands.add(engine.getGameFolder().getLibsDir() + "/org/ow2/asm/asm/9.1/asm-9.1.jar");
-
+		
 //		commands.add("--add-modules ALL-MODULE-PATH");
 //		commands.add("--add-opens java.base/java.util.jar=cpw.mods.securejarhandler");
 //		commands.add("--add-exports java.base/sun.security.util=cpw.mods.securejarhandler");
 //		commands.add("--add-exports jdk.naming.dns/com.sun.jndi.dns=java.naming");
-
+		
 
 		boolean is32Bit = "32".equals(System.getProperty("sun.arch.data.model"));
 		String defaultArgument = is32Bit ? "-Xmx512M -Xmn128M" : "-Xmx1G -Xmn128M";
@@ -237,9 +231,9 @@ public class GameRunner {
 
 		/** ----- Minecraft Arguments ----- */
 		if (engine.getMinecraftVersion().getMinecraftArguments() != null) {
-			final String[] argsD = getArgumentsOlder();
-			List<String> arguments = Arrays.asList(argsD);
-			commands.addAll(arguments);
+	        final String[] argsD = getArgumentsOlder();
+	        List<String> arguments = Arrays.asList(argsD);
+	        commands.addAll(arguments);
 		}
 		/** ----- Minecraft Arguments 1.13+ ----- */
 		if (engine.getMinecraftVersion().getArguments() != null) {
@@ -268,7 +262,8 @@ public class GameRunner {
 		}
 
 		/** ----- Change properties of Forge (1.13+) ----- */
-		if (engine.getGameStyle().getSpecificsArguments() != null) {
+		if (!engine.getGameStyle().getSpecificsArguments().equals("")) {
+			System.out.println(getForgeArguments());
 			commands.addAll(getForgeArguments());
 		}
 
@@ -279,60 +274,34 @@ public class GameRunner {
 		}
 
 		/** ----- Tweak Class if required ----- */
-		if (engine.getGameStyle().equals(GameStyle.FORGE_1_7_10_OLD)
-				|| engine.getGameStyle().equals(GameStyle.FORGE_1_8_TO_1_12_2)
-				|| engine.getGameStyle().equals(GameStyle.OPTIFINE)) {
+		if (engine.getGameStyle().equals(GameStyle.FORGE_1_7_10_OLD) || engine.getGameStyle().equals(GameStyle.FORGE_1_8_TO_1_12_2) || engine.getGameStyle().equals(GameStyle.OPTIFINE)) {
 			commands.add("--tweakClass");
 			commands.add(engine.getGameStyle().getTweakArgument());
-		}
-		if (engine.getGameStyle().equals(GameStyle.FORGE_1_17_HIGHER)){
-			String separator = System.getProperty("path.separator");
-			commands.add("-DignoreList=bootstraplauncher,securejarhandler,asm-commons,asm-util,asm-analysis,asm-tree,asm,client-extra,fmlcore,javafmllanguage,mclanguage,forge-,minecraft.jar");
-	        commands.add("-DmergeModules=jna-5.8.0.jar,jna-platform-58.0.jar,java-objc-bridge-1.0.0.jar");
-	        commands.add("-DlibraryDirectory=" + engine.getGameFolder().getLibsDir().getAbsolutePath());
-	        StringBuilder forge = new StringBuilder();
-	        commands.add("-p");
-	        forge.append(engine.getGameFolder().getLibsDir()).append("\\cpw\\mods\\bootstraplauncher\\1.0.0\\bootstraplauncher-1.0.0.jar").append(separator);
-	        forge.append(engine.getGameFolder().getLibsDir()).append("\\cpw\\mods\\securejarhandler\\1.0.3\\securejarhandler-1.0.3.jar").append(separator);
-	        forge.append(engine.getGameFolder().getLibsDir()).append("\\org\\ow2\\asm\\asm-commons\\9.2\\asm-commons-9.2.jar").append(separator);
-	        forge.append(engine.getGameFolder().getLibsDir()).append("\\org\\ow2\\asm\\asm-util\\9.2\\asm-util-9.2.jar").append(separator);
-	        forge.append(engine.getGameFolder().getLibsDir()).append("\\org\\ow2\\asm\\asm-analysis\\9.2\\asm-analysis-9.2.jar").append(separator);
-	        forge.append(engine.getGameFolder().getLibsDir()).append("\\org\\ow2\\asm\\asm-tree\\9.2\\asm-tree-9.2.jar").append(separator);
-	        forge.append(engine.getGameFolder().getLibsDir()).append("\\org\\ow2\\asm\\asm\\9.2\\asm-9.2.jar");
-	        commands.add(forge.toString());
-	        //System.out.println(forge);
-	        commands.add("--add-modules");
-	        commands.add("ALL-MODULE-PATH");
-	        commands.add("--add-opens");
-	        commands.add("java.base/java.util.jar=cpw.mods.securejarhandler");
-	        commands.add("--add-exports");
-	        commands.add("java.base/sun.security.util=cpw.mods.securejarhandler");
-	        commands.add("--add-exports");
-	        commands.add("jdk.naming.dns/com.sun.jndi.dns=java.naming");
 		}
 		return commands;
 	}
 
+	private List<String> getForgeJVMArguments() {
+		List<String> forgeArgs = this.engine.getGameForge().getArguments().getJvm();
+		List<String> jvmArgs = new ArrayList<>();
+		for (String arg : forgeArgs) {
+			jvmArgs.add(arg.replace("${version_name}","minecraft")
+					.replace("${library_directory}",this.engine.getGameFolder().getLibsDir().getAbsolutePath())
+					.replace("${classpath_separator}",System.getProperty("path.separator")));
+		}
+		return jvmArgs;
+	}
+
 	/**
 	 * Get forge arguments (If gameStyle != Vanilla or Vanilla_Plus)
-	 * 
 	 * @return A List<String> of specifics arguments
 	 */
 	private List<String> getForgeArguments() {
-		String specfs = engine.getGameStyle().getSpecificsArguments();
-		specfs = specfs.replace("${launch_target_fml}", GameForge.getLaunchTarget())
-				.replace("${forge_version_fml}", GameForge.getForgeVersion())
-				.replace("${mc_version_fml}", GameForge.getMcVersion())
-				.replace("${forge_group_fml}", GameForge.getForgeGroup())
-				.replace("${mcp_version_fml}", GameForge.getMcpVersion());
-		String[] ficelle = specfs.split(" ");
-		List<String> newerList = Arrays.asList(ficelle);
-		return newerList;
+		return engine.getGameForge().getArguments().getGame();
 	}
 
 	/**
 	 * Get minecraft launch arguments for old versions of Minecraft
-	 * 
 	 * @return a String[] with multiples arguments
 	 */
 	private String[] getArgumentsOlder() {
@@ -358,7 +327,6 @@ public class GameRunner {
 
 	/**
 	 * Get minecraft launch arguments for new versions of Minecraft
-	 * 
 	 * @param args The arguments from json as a List
 	 * @return a String[] with multiples arguments
 	 */
@@ -367,7 +335,7 @@ public class GameRunner {
 		final StrSubstitutor substitutor = new StrSubstitutor(map);
 		final String[] split = new String[args.size()];
 		for (int i = 0; i < args.size(); i++) {
-			split[i] = args.get(i).getArguments();
+				split[i] = args.get(i).getArguments();
 		}
 		map.put("auth_player_name", this.session.getUsername());
 		map.put("auth_uuid", this.session.getUuid());
@@ -414,19 +382,18 @@ public class GameRunner {
 
 	/**
 	 * Hide the access token inside the console
-	 * 
 	 * @param arguments The Token
 	 * @return A List<String> of the token hidden
 	 */
 	public static List<String> hideAccessToken(String[] arguments) {
-		final ArrayList<String> output = new ArrayList<String>();
-		for (int i = 0; i < arguments.length; i++) {
-			if (i > 0 && Objects.equals(arguments[i - 1], "--accessToken")) {
-				output.add("????????");
-			} else {
-				output.add(arguments[i]);
-			}
-		}
-		return output;
-	}
+        final ArrayList<String> output = new ArrayList<String>();
+        for (int i = 0; i < arguments.length; i++) {
+            if (i > 0 && Objects.equals(arguments[i-1], "--accessToken")) {
+                output.add("????????");
+            } else {
+                output.add(arguments[i]);
+            }
+        }
+        return output;
+    }
 }

@@ -22,9 +22,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-import fr.trxyy.alternative.alternative_api.GameEngine;
-import fr.trxyy.alternative.alternative_api.GameStyle;
-import fr.trxyy.alternative.alternative_api.GameVerifier;
+import fr.trxyy.alternative.alternative_api.*;
 import fr.trxyy.alternative.alternative_api.assets.AssetIndex;
 import fr.trxyy.alternative.alternative_api.assets.AssetObject;
 import fr.trxyy.alternative.alternative_api.build.GameRunner;
@@ -186,9 +184,21 @@ public class GameUpdater extends Thread {
 
 			this.setCurrentInfoText("Indexion de la version Minecraft.");
 
+			if (this.engine.getGameStyle().equals(GameStyle.FORGE_1_13_HIGHER) || this.engine.getGameStyle().equals(GameStyle.FORGE_1_17_HIGHER)) {
+				Logger.log("Indexing forge version        [2-bonus/6]");
+				Logger.log("========================================");
+
+				this.setCurrentInfoText("Indexion de la version Forge.");
+
+				this.indexForge();
+
+			}
+
 			this.indexVersion();
 			Logger.log("Indexing assets               [Step 3/6]");
 			Logger.log("========================================");
+
+
 
 			this.setCurrentInfoText("Acquisition des fichiers de ressources.");
 
@@ -266,6 +276,16 @@ public class GameUpdater extends Thread {
 			Logger.log("Indexing local version         [Step 1/1]");
 			Logger.log("========================================");
 			this.indexLocalVersion();
+
+			if (this.engine.getGameStyle().equals(GameStyle.FORGE_1_13_HIGHER) || this.engine.getGameStyle().equals(GameStyle.FORGE_1_17_HIGHER)) {
+				Logger.log("Indexing forge version        [2-bonus/6]");
+				Logger.log("========================================");
+
+				this.setCurrentInfoText("Indexion de la version Forge.");
+
+				this.indexLocalForge();
+
+			}
 			
 			if (!this.engine.getGameStyle().equals(GameStyle.VANILLA)) {
 				Logger.log("Indexing custom local jars   [Extra Step]");
@@ -292,7 +312,9 @@ public class GameUpdater extends Thread {
 			}
 		}
 	}
-	
+
+
+
 	private void downloadJavaManifest() {
 		if (this.getEngine().getMinecraftVersion().getJavaVersion() != null) {
 			String json = null;
@@ -608,6 +630,18 @@ public class GameUpdater extends Thread {
 			engine.reg(minecraftVersion);
 		}
 	}
+
+	private void indexForge() {
+		String json = null;
+		try {
+			json = JsonUtil.loadJSON(engine.getGameLinks().getBaseUrl() + "forge.json");
+		} catch (IOException e) {
+			System.err.println(engine.getGameLinks().getBaseUrl() + "forge.json" + "not found.");
+			e.printStackTrace();
+		}finally{
+			 engine.reg(JsonUtil.getGson().fromJson(json, GameForge.class));
+		}
+	}
 	
 	/**
 	 * Index Minecraft local version json
@@ -618,13 +652,27 @@ public class GameUpdater extends Thread {
 		try {
 			json = JsonUtil.loadJSON(f.toURL().toString());
 		} catch (IOException e) {
+			System.err.println(f.getAbsolutePath() + "not found.");
 			e.printStackTrace();
 		} finally {
 			minecraftLocalVersion = (MinecraftVersion) JsonUtil.getGson().fromJson(json, MinecraftVersion.class);
 			engine.reg(minecraftLocalVersion);
 		}
 	}
-	
+
+	private void indexLocalForge() {
+		File f = new File(engine.getGameFolder().getCacheDir(), "forge.json");
+		String json = null;
+		try {
+			json = JsonUtil.loadJSON(f.toURL().toString());
+		} catch (IOException e) {
+			e.printStackTrace();
+		}finally{
+			engine.reg(JsonUtil.getGson().fromJson(json, GameForge.class));
+		}
+	}
+
+
 	/**
 	 * Index Minecraft java version
 	 */
