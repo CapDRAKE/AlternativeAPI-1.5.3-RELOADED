@@ -1,6 +1,8 @@
 package fr.trxyy.alternative.alternative_api;
 
 
+import fr.trxyy.alternative.alternative_api.minecraft.json.*;
+
 import java.util.*;
 
 /**
@@ -9,6 +11,11 @@ import java.util.*;
 public class GameForge {
 
 	private Arguments arguments;
+	private List<Forge1_17_HeigherLibrary> libraries;
+
+	public List<Forge1_17_HeigherLibrary> getLibraries() {
+		return libraries;
+	}
 
 	public Arguments getArguments() {
 		return arguments;

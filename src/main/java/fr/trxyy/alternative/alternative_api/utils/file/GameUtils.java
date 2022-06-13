@@ -1,9 +1,9 @@
 package fr.trxyy.alternative.alternative_api.utils.file;
 
-import java.io.File;
-import java.util.ArrayList;
+import fr.trxyy.alternative.alternative_api.*;
 
-import fr.trxyy.alternative.alternative_api.GameEngine;
+import java.io.*;
+import java.util.*;
 
 /**
  * @author Trxyy
@@ -61,11 +61,10 @@ public class GameUtils {
 	 */
 	public static String constructClasspath(GameEngine engine) {
 		String result = "";
-		ArrayList<File> libs = list(engine.getGameFolder().getLibsDir());
 		String separator = System.getProperty("path.separator");
-		for (File lib : libs) {
-			if (lib.getAbsolutePath().endsWith(".jar") || lib.getAbsolutePath().endsWith(".zip")){
-				result += lib.getAbsolutePath() + separator;
+		for (String lib : engine.getGameUpdater().getJars()) {
+			if (lib.endsWith(".jar") || lib.endsWith(".zip")){
+				result += lib + separator;
 			}
 		}
 		result += engine.getGameFolder().getGameJar().getAbsolutePath();

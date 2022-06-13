@@ -1,30 +1,15 @@
 package fr.trxyy.alternative.alternative_api.utils.file;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.Closeable;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.math.BigInteger;
-import java.net.URL;
-import java.nio.charset.Charset;
-import java.nio.file.DirectoryNotEmptyException;
-import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.security.DigestInputStream;
-import java.security.MessageDigest;
-import java.util.Enumeration;
-import java.util.Scanner;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
+import fr.trxyy.alternative.alternative_api.*;
 
-import fr.trxyy.alternative.alternative_api.GameEngine;
+import java.io.*;
+import java.math.*;
+import java.net.*;
+import java.nio.charset.*;
+import java.nio.file.*;
+import java.security.*;
+import java.util.*;
+import java.util.zip.*;
 
 /**
  * @author Trxyy
@@ -44,7 +29,8 @@ public class FileUtil {
 	 */
 	public static void deleteFakeNatives(File targetDir, GameEngine engine) throws IOException {
 		File[] listOfFiles = engine.getGameFolder().getNativesDir().listFiles();
-		for (int index = 0; index < listOfFiles.length; index++) {
+		for (int index = 0; index < Objects.requireNonNull(listOfFiles).length; index++) {
+			move(engine.getGameFolder().getNativesDir(),engine.getGameFolder().getNativesDir());
 			if (listOfFiles[index].isFile()) {
 				if (!listOfFiles[index].getName().endsWith(".dll")) {
 					if (!listOfFiles[index].getName().endsWith(".dylib")) {
@@ -98,6 +84,18 @@ public class FileUtil {
 					}
 				} finally {
 					zip.close();
+				}
+			}
+		}
+	}
+
+	private static void move(File toDir, File currDir) {
+		for (File file : currDir.listFiles()) {
+			if (file.isDirectory()) {
+				move(toDir, file);
+			} else {
+				if (file.getName().endsWith(".dll") || file.getName().endsWith(".dylib") || file.getName().endsWith(".so")) {
+					file.renameTo(new File(toDir, file.getName()));
 				}
 			}
 		}

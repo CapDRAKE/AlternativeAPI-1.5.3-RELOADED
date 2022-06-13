@@ -1,30 +1,19 @@
 package fr.trxyy.alternative.alternative_api.build;
 
-import java.awt.Desktop;
-import java.io.File;
-import java.io.IOException;
-import java.lang.ProcessBuilder.Redirect;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
+import fr.trxyy.alternative.alternative_api.*;
+import fr.trxyy.alternative.alternative_api.minecraft.json.*;
+import fr.trxyy.alternative.alternative_api.utils.*;
+import fr.trxyy.alternative.alternative_api.utils.file.*;
+import fr.trxyy.alternative.alternative_auth.account.*;
+import javafx.application.*;
+import org.apache.commons.lang3.text.*;
+
+import java.awt.*;
+import java.io.*;
+import java.lang.ProcessBuilder.*;
+import java.net.*;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-
-import org.apache.commons.lang3.text.StrSubstitutor;
-
-import fr.trxyy.alternative.alternative_api.GameEngine;
-import fr.trxyy.alternative.alternative_api.GameForge;
-import fr.trxyy.alternative.alternative_api.GameStyle;
-import fr.trxyy.alternative.alternative_api.minecraft.json.Argument;
-import fr.trxyy.alternative.alternative_api.minecraft.json.ArgumentType;
-import fr.trxyy.alternative.alternative_api.utils.Logger;
-import fr.trxyy.alternative.alternative_api.utils.OperatingSystem;
-import fr.trxyy.alternative.alternative_api.utils.file.FileUtil;
-import fr.trxyy.alternative.alternative_api.utils.file.GameUtils;
-import fr.trxyy.alternative.alternative_auth.account.Session;
-import javafx.application.Platform;
+import java.util.*;
 
 /**
  * @author Trxyy
@@ -154,7 +143,7 @@ public class GameRunner {
 		if (engine.getGameStyle().equals(GameStyle.FORGE_1_17_HIGHER)) {
 			commands.addAll(this.getForgeJVMArguments());
 		}
-		commands.add("-Dbsl.debug=True");
+		//commands.add("-Dbsl.debug=True");
 
 		if (os.equals(OperatingSystem.OSX)) {
 			commands.add("-Xdock:name=Minecraft");
@@ -191,8 +180,8 @@ public class GameRunner {
 			File log4jFile = new File(this.engine.getGameFolder().getLogConfigsDir(), this.engine.getMinecraftVersion().getLogging().getClient().getFile().getId());
 			commands.add(this.engine.getMinecraftVersion().getLogging().getClient().getArgument().replace("${path}", log4jFile.getAbsolutePath()));
 		}
-		
-		commands.add("-Djava.library.path=" + engine.getGameFolder().getNativesDir().getAbsolutePath());
+		if (!this.engine.getGameStyle().equals(GameStyle.VANILLA_1_19_HIGHER))
+			commands.add("-Djava.library.path=" + engine.getGameFolder().getNativesDir().getAbsolutePath());
 		commands.add("-Dfml.ignoreInvalidMinecraftCertificates=true");
 		commands.add("-Dfml.ignorePatchDiscrepancies=true");
 		
@@ -263,7 +252,6 @@ public class GameRunner {
 
 		/** ----- Change properties of Forge (1.13+) ----- */
 		if (!engine.getGameStyle().getSpecificsArguments().equals("")) {
-			System.out.println(getForgeArguments());
 			commands.addAll(getForgeArguments());
 		}
 
