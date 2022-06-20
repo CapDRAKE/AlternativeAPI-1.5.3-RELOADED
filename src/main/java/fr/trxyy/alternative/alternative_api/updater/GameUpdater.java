@@ -111,7 +111,7 @@ public class GameUpdater extends Thread {
     public int filesToDownload = 0;
     private boolean isOnline = true;
 
-    private final List<String> jars = new ArrayList<>();
+    private final Map<String,String> jars = new HashMap<>();
 
     /**
      * Register some things...
@@ -181,7 +181,7 @@ public class GameUpdater extends Thread {
             this.setCurrentInfoText("Acquisition des fichiers de ressources.");
 
             this.indexAssets();
-            if (!this.engine.getGameStyle().equals(GameStyle.VANILLA)) {
+            if (!this.engine.getGameStyle().equals(GameStyle.VANILLA) && !this.engine.getGameStyle().equals(GameStyle.VANILLA_1_19_HIGHER)) {
                 Logger.log("Indexing custom jars         [3-bonus/6]");
                 Logger.log("========================================");
 
@@ -207,7 +207,7 @@ public class GameUpdater extends Thread {
             }
 
 
-            if (!engine.getGameStyle().equals(GameStyle.VANILLA)) {
+            if (!this.engine.getGameStyle().equals(GameStyle.VANILLA) && !this.engine.getGameStyle().equals(GameStyle.VANILLA_1_19_HIGHER)) {
                 Logger.log("Updating custom jars         [5-bonus/6]");
                 Logger.log("========================================");
                 this.setCurrentInfoText("Telechargement des ressources perso.");
@@ -292,7 +292,7 @@ public class GameUpdater extends Thread {
             }
             this.customJarsExecutor.shutdown();
             try {
-                this.customJarsExecutor.awaitTermination(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
+                this.customJarsExecutor.awaitTermination(200000, TimeUnit.MILLISECONDS);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -331,9 +331,9 @@ public class GameUpdater extends Thread {
                 Map<String, List<JavaRuntime>> r = this.javaManifest.getCurrentJava();
                 for (String run : r.keySet()) {
                     if (run.equals(this.getEngine().getMinecraftVersion().getJavaVersion().getComponent())) {
-                        Logger.log("Choosen: " + run);
+                        //Logger.log("Choosen: " + run);
                         ArrayList<JavaRuntime> s = (ArrayList<JavaRuntime>) r.get(run);
-                        Logger.log("test: " + s.get(0).getManifest().getUrl());
+                        //Logger.log("test: " + s.get(0).getManifest().getUrl());
                         this.indexJava(s.get(0).getManifest().getUrl().toString());
                         break;
                     }
@@ -458,7 +458,7 @@ public class GameUpdater extends Thread {
             }
 
             if (!lib.isSkipped()) {
-                jars.add(libPath.getAbsolutePath());
+                jars.put(simplifyName(lib.getName()),libPath.getAbsolutePath());
                 if (lib.getDownloads().getArtifact() != null) {
                     final Downloader downloadTask = new Downloader(libPath,
                             lib.getDownloads().getArtifact().getUrl().toString(),
@@ -522,10 +522,13 @@ public class GameUpdater extends Thread {
         }
     }
 
+    private String simplifyName(String name) {
+        return name.split(":")[1];
+    }
+
     private void update1_19_HighersLibraries() {
         for (MinecraftLibrary lib : minecraftVersion.getLibraries()) {
             File libPath = new File(engine.getGameFolder().getLibsDir(), lib.getDownloads().getArtifact().getPath());
-
             GameVerifier.addToFileList(
                     libPath.getAbsolutePath().replace(engine.getGameFolder().getGameDir().getAbsolutePath(), "")
                             .replace('/', File.separatorChar));
@@ -553,7 +556,7 @@ public class GameUpdater extends Thread {
             }
 
             if (!lib.isSkipped()) {
-                jars.add(libPath.getAbsolutePath());
+                jars.put(simplifyName(lib.getName()),libPath.getAbsolutePath());
                 if (lib.getDownloads().getArtifact() != null) {
                     final Downloader downloadTask = new Downloader(libPath,
                             lib.getDownloads().getArtifact().getUrl().toString(),
@@ -594,13 +597,21 @@ public class GameUpdater extends Thread {
     }
 
     private void updateForgeLibraries() {
+        if (this.engine.getGameForge() == null){
+            Logger.err("No forge version found");
+            System.exit(3);
+        }
         for (Forge1_17_HeigherLibrary lib : this.engine.getGameForge().getLibraries()) {
             File libPath = new File(engine.getGameFolder().getLibsDir(), lib.getDownloads().getArtifact().getPath());
             GameVerifier.addToFileList(
                     libPath.getAbsolutePath().replace(engine.getGameFolder().getGameDir().getAbsolutePath(), "")
                             .replace('/', File.separatorChar));
-            jars.add(libPath.getAbsolutePath());
+            jars.put(simplifyName(lib.getName()),libPath.getAbsolutePath());
             if (lib.getDownloads().getArtifact() != null) {
+                if (lib.getDownloads().getArtifact().getUrl() == null || lib.getDownloads().getArtifact().getUrl().isEmpty()) {
+                    continue;
+                }
+
                 final Downloader downloadTask = new Downloader(libPath,
                         lib.getDownloads().getArtifact().getUrl().toString(),
                         lib.getDownloads().getArtifact().getSha1(), engine);
@@ -611,6 +622,7 @@ public class GameUpdater extends Thread {
                         this.customJarsExecutor.submit(downloadTask);
                     } else {
                     }
+
                 }
             }
 
@@ -736,7 +748,7 @@ public class GameUpdater extends Thread {
         try {
             json = JsonUtil.loadJSON(engine.getGameLinks().getBaseUrl() + "forge.json");
         } catch (IOException e) {
-            System.err.println(engine.getGameLinks().getBaseUrl() + "forge.json" + "not found.");
+            System.err.println(engine.getGameLinks().getBaseUrl() + "forge.json" + " not found.");
             e.printStackTrace();
         } finally {
             engine.reg(JsonUtil.getGson().fromJson(json, GameForge.class));
@@ -794,7 +806,6 @@ public class GameUpdater extends Thread {
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
-            Logger.log("jsonM: " + javaManifestJson);
             jvmManifest = (JVMManifest) JsonUtil.getGson().fromJson(javaManifestJson, JVMManifest.class);
         }
     }
@@ -842,7 +853,7 @@ public class GameUpdater extends Thread {
 
             File libPath = new File(engine.getGameFolder().getGameDir() + File.separator + dirLocation);
             String url = engine.getGameLinks().getCustomFilesUrl() + name;
-            jars.add(libPath.getAbsolutePath());
+            jars.put(name.replace(".jar",""),libPath.getAbsolutePath());
             final Downloader customDownloadTask = new Downloader(libPath, url, null, engine); // GameParser
             if (!verifier.existInDeleteList(
                     libPath.getAbsolutePath().replace(engine.getGameFolder().getGameDir().getAbsolutePath(), ""))) {
@@ -867,8 +878,8 @@ public class GameUpdater extends Thread {
         return new File(hex, hash);
     }
 
-    public List<String> getJars() {
-        return jars;
+    public Collection<String> getJars() {
+        return  jars.values();
     }
 
     /**

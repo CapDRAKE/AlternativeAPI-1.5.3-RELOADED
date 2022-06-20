@@ -1,6 +1,7 @@
 package fr.trxyy.alternative.alternative_api.utils.file;
 
 import fr.trxyy.alternative.alternative_api.*;
+import fr.trxyy.alternative.alternative_api.utils.*;
 
 import java.io.*;
 import java.util.*;
@@ -64,6 +65,7 @@ public class GameUtils {
 		String separator = System.getProperty("path.separator");
 		for (String lib : engine.getGameUpdater().getJars()) {
 			if (lib.endsWith(".jar") || lib.endsWith(".zip")){
+				Logger.log("Adding " + lib);
 				result += lib + separator;
 			}
 		}

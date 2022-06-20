@@ -1,10 +1,16 @@
 package fr.trxyy.alternative.alternative_api.minecraft.json;
 
 public class Forge1_17_HeigherLibrary {
+
+    private String name;
     private Downloads downloads;
 
     public Downloads getDownloads() {
         return downloads;
+    }
+
+    public String getName() {
+        return name;
     }
 
     public class Artifact{

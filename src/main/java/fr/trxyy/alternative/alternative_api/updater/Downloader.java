@@ -4,8 +4,7 @@ import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.net.URL;
-import java.net.URLConnection;
+import java.net.*;
 
 import fr.trxyy.alternative.alternative_api.GameEngine;
 import fr.trxyy.alternative.alternative_api.GameVerifier;
@@ -53,7 +52,12 @@ public class Downloader extends Thread {
 	 */
 	public Downloader(File file, String url, String sha1, GameEngine engine_) {
 		this.file = file;
-		this.url = url;
+		if (url.equals(" ") ||url.isEmpty()) {
+			System.err.println("The url is empty");
+			this.url = "";
+		} else {
+			this.url = url;
+		}
 		this.sha1 = sha1;
 		this.engine = engine_;
 		GameVerifier.addToFileList(file.getAbsolutePath().replace(engine.getGameFolder().getGameDir().getAbsolutePath(), "").replace("\\", "/"));
@@ -93,7 +97,11 @@ public class Downloader extends Thread {
 				fileOutputStream.write(data, 0, read);
 			}
 			engine.getGameUpdater().downloadedFiles++;
-		} finally {
+		}catch (MalformedURLException e) {
+			e.printStackTrace();
+			Logger.err(e.getLocalizedMessage() + " " + this.url);
+
+		}finally {
 			if (bufferedInputStream != null) {
 				bufferedInputStream.close();
 			}
