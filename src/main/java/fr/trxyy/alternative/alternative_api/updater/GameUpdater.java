@@ -556,7 +556,7 @@ public class GameUpdater extends Thread {
             }
 
             if (!lib.isSkipped()) {
-                jars.put(simplifyName(lib.getName()),libPath.getAbsolutePath());
+                jars.put(lib.getName(),libPath.getAbsolutePath());
                 if (lib.getDownloads().getArtifact() != null) {
                     final Downloader downloadTask = new Downloader(libPath,
                             lib.getDownloads().getArtifact().getUrl().toString(),
