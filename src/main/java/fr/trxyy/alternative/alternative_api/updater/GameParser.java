@@ -51,6 +51,7 @@ public class GameParser {
 	                  final long size = Long.parseLong(element.getElementsByTagName("Size").item(0).getChildNodes().item(0).getNodeValue());
 
 					File localFile = new File(engine.getGameFolder().getGameDir(), key);
+					engine.getGameUpdater().jars.put(key.replace(".jar",""),localFile.getAbsolutePath());
 					GameVerifier.addToFileList(localFile.getAbsolutePath().replace(engine.getGameFolder().getGameDir().getAbsolutePath(), "").replace('/', File.separatorChar));
 					if (key.contains("minecraft.jar")) {
 						engine.getGameUpdater().hasCustomJar = true;
@@ -75,6 +76,8 @@ public class GameParser {
 								}
 							} else {
 								if (!(engine.getGameLinks().getCustomFilesUrl() + key).endsWith("/")) {
+
+
 									engine.getGameUpdater().files.put(key, new LauncherFile(size, engine.getGameLinks().getCustomFilesUrl() + key, localFile.getAbsolutePath()));
 									engine.getGameUpdater().filesToDownload++;
 								}

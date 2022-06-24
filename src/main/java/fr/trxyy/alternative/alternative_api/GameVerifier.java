@@ -57,7 +57,7 @@ public class GameVerifier {
 	 * Verify files to ignore/delete
 	 */
 	public void verify() {
-		this.filesList = (List<File>)FileUtils.listFiles(this.engine.getGameFolder().getGameDir(), TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE);
+		this.filesList = (List<File>)FileUtils.listFiles(this.engine.getGameFolder().getBinDir(), TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE);
 		for (File file : this.filesList) {
 			
 			if (file.getAbsolutePath().endsWith(engine.getGameLinks().getJsonName())) {

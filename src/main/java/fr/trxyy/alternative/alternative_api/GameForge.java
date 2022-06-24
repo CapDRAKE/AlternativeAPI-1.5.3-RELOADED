@@ -11,9 +11,10 @@ import java.util.*;
 public class GameForge {
 
 	private Arguments arguments;
-	private List<Forge1_17_HeigherLibrary> libraries;
 
-	public List<Forge1_17_HeigherLibrary> getLibraries() {
+	private List<Forge1_17_HigherLibrary> libraries;
+
+	public List<Forge1_17_HigherLibrary> getLibraries() {
 		return libraries;
 	}
 

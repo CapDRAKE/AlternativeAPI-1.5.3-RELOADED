@@ -143,7 +143,7 @@ public class GameRunner {
 		if (engine.getGameStyle().equals(GameStyle.FORGE_1_17_HIGHER)) {
 			commands.addAll(this.getForgeJVMArguments());
 		}
-		//commands.add("-Dbsl.debug=True");
+		commands.add("-Dbsl.debug=True");
 
 		if (os.equals(OperatingSystem.OSX)) {
 			commands.add("-Xdock:name=Minecraft");

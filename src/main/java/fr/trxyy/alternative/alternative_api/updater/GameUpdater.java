@@ -111,7 +111,7 @@ public class GameUpdater extends Thread {
     public int filesToDownload = 0;
     private boolean isOnline = true;
 
-    private final Map<String,String> jars = new HashMap<>();
+    public final Map<String,String> jars = new HashMap<>();
 
     /**
      * Register some things...
@@ -162,7 +162,7 @@ public class GameUpdater extends Thread {
 
             this.setCurrentInfoText("Indexion de la version Minecraft.");
 
-            if (this.isForge()) {
+            if (this.isForge() && !this.engine.getGameStyle().equals(GameStyle.FORGE_1_8_TO_1_12_2 )) {
 
                 Logger.log("Indexing forge version        [2-bonus/6]");
                 Logger.log("========================================");
@@ -218,7 +218,10 @@ public class GameUpdater extends Thread {
                 Logger.log("Updating forge libraries     [5-bonus-bis/6]");
                 Logger.log("========================================");
                 this.setCurrentInfoText("Telechargement des librairies Forge.");
-                this.updateForgeLibraries();
+                if (!this.engine.getGameStyle().equals(GameStyle.FORGE_1_8_TO_1_12_2 )){
+                    this.updateForgeLibraries();
+                }
+
             }
             this.customJarsExecutor.shutdown();
             try {
@@ -596,12 +599,13 @@ public class GameUpdater extends Thread {
         }
     }
 
+
     private void updateForgeLibraries() {
         if (this.engine.getGameForge() == null){
             Logger.err("No forge version found");
             System.exit(3);
         }
-        for (Forge1_17_HeigherLibrary lib : this.engine.getGameForge().getLibraries()) {
+        for (Forge1_17_HigherLibrary lib : this.engine.getGameForge().getLibraries()) {
             File libPath = new File(engine.getGameFolder().getLibsDir(), lib.getDownloads().getArtifact().getPath());
             GameVerifier.addToFileList(
                     libPath.getAbsolutePath().replace(engine.getGameFolder().getGameDir().getAbsolutePath(), "")
@@ -853,7 +857,6 @@ public class GameUpdater extends Thread {
 
             File libPath = new File(engine.getGameFolder().getGameDir() + File.separator + dirLocation);
             String url = engine.getGameLinks().getCustomFilesUrl() + name;
-            jars.put(name.replace(".jar",""),libPath.getAbsolutePath());
             final Downloader customDownloadTask = new Downloader(libPath, url, null, engine); // GameParser
             if (!verifier.existInDeleteList(
                     libPath.getAbsolutePath().replace(engine.getGameFolder().getGameDir().getAbsolutePath(), ""))) {
