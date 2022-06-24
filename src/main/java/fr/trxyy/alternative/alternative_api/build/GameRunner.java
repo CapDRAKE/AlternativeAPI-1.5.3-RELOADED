@@ -140,10 +140,11 @@ public class GameRunner {
 			commands.addAll(engine.getJVMArguments().getJVMArguments());
 		}
 
-		if (engine.getGameStyle().equals(GameStyle.FORGE_1_17_HIGHER)) {
+		if (engine.getGameStyle().equals(GameStyle.FORGE_1_17_HIGHER) || engine.getGameStyle().equals(GameStyle.FORGE_1_19_HIGHER)) {
 			commands.addAll(this.getForgeJVMArguments());
+			Logger.log(String.valueOf(this.getForgeJVMArguments()));
 		}
-		commands.add("-Dbsl.debug=True");
+		//commands.add("-Dbsl.debug=True");
 
 		if (os.equals(OperatingSystem.OSX)) {
 			commands.add("-Xdock:name=Minecraft");
@@ -180,7 +181,7 @@ public class GameRunner {
 			File log4jFile = new File(this.engine.getGameFolder().getLogConfigsDir(), this.engine.getMinecraftVersion().getLogging().getClient().getFile().getId());
 			commands.add(this.engine.getMinecraftVersion().getLogging().getClient().getArgument().replace("${path}", log4jFile.getAbsolutePath()));
 		}
-		if (!this.engine.getGameStyle().equals(GameStyle.VANILLA_1_19_HIGHER))
+		if (!this.engine.getGameStyle().equals(GameStyle.VANILLA_1_19_HIGHER) || !this.engine.getGameStyle().equals(GameStyle.FORGE_1_19_HIGHER))
 			commands.add("-Djava.library.path=" + engine.getGameFolder().getNativesDir().getAbsolutePath());
 		commands.add("-Dfml.ignoreInvalidMinecraftCertificates=true");
 		commands.add("-Dfml.ignorePatchDiscrepancies=true");

@@ -200,10 +200,10 @@ public class GameUpdater extends Thread {
 
             this.setCurrentInfoText("Telechargement des librairies.");
 
-            if (!this.engine.getGameStyle().equals(GameStyle.VANILLA_1_19_HIGHER)) {
-                this.updateJars();
-            } else {
+            if (this.engine.getGameStyle().equals(GameStyle.VANILLA_1_19_HIGHER) || this.engine.getGameStyle().equals(GameStyle.FORGE_1_19_HIGHER)) {
                 this.update1_19_HighersLibraries();
+            } else {
+                this.updateJars();
             }
 
 
@@ -867,7 +867,7 @@ public class GameUpdater extends Thread {
     }
 
     private boolean isForge() {
-        return this.engine.getGameStyle().equals(GameStyle.FORGE_1_13_HIGHER) || this.engine.getGameStyle().equals(GameStyle.FORGE_1_17_HIGHER) || this.engine.getGameStyle().equals(GameStyle.FORGE_1_7_10_OLD) || this.engine.getGameStyle().equals(GameStyle.FORGE_1_8_TO_1_12_2);
+        return this.engine.getGameStyle().equals(GameStyle.FORGE_1_13_HIGHER) || this.engine.getGameStyle().equals(GameStyle.FORGE_1_17_HIGHER) || this.engine.getGameStyle().equals(GameStyle.FORGE_1_7_10_OLD) || this.engine.getGameStyle().equals(GameStyle.FORGE_1_8_TO_1_12_2) || this.engine.getGameStyle().equals(GameStyle.FORGE_1_19_HIGHER);
     }
 
     /**
