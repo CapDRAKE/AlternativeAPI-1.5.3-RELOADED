@@ -60,15 +60,18 @@ public class GameUtils {
 	 * @return A String that contains the classpath
 	 */
 	public static String constructClasspath(GameEngine engine) {
-		String result = "";
-		ArrayList<File> libs = list(engine.getGameFolder().getLibsDir());
-		String separator = System.getProperty("path.separator");
-		for (File lib : libs) {
-			result += lib.getAbsolutePath() + separator;
-		}
-		result += engine.getGameFolder().getGameJar().getAbsolutePath();
-		return result;
-	}
+        String result = "";
+        ArrayList<File> libs = list(engine.getGameFolder().getLibsDir());
+        String separator = System.getProperty("path.separator");
+        for (File lib : libs) {
+            if (lib.getAbsolutePath().endsWith(".jar") || lib.getAbsolutePath().endsWith(".zip")){
+                result += lib.getAbsolutePath() + separator;
+            }
+
+        }
+        result += engine.getGameFolder().getGameJar().getAbsolutePath();
+        return result;
+    }
 
 	/**
 	 * @param folder The folder to list

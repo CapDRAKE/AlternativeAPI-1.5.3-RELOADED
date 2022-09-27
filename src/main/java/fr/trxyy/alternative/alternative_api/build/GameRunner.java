@@ -283,6 +283,32 @@ public class GameRunner {
 			commands.add("--tweakClass");
 			commands.add(engine.getGameStyle().getTweakArgument());
 		}
+		
+		if(engine.getGameStyle().equals(GameStyle.FORGE_1_17_HIGHER)) {
+			String separator = System.getProperty("path.separator");
+			commands.add("-DignoreList=bootstraplauncher,securejarhandler,asm-commons,asm-util,asm-analysis,asm-tree,asm,client-extra,fmlcore,javafmllanguage,mclanguage,forge-,minecraft.jar");
+	        commands.add("-DmergeModules=jna-5.8.0.jar,jna-platform-58.0.jar,java-objc-bridge-1.0.0.jar");
+	        commands.add("-DlibraryDirectory=" + engine.getGameFolder().getLibsDir().getAbsolutePath());
+	        StringBuilder forge = new StringBuilder();
+	        commands.add("-p");
+	        forge.append(engine.getGameFolder().getLibsDir()).append("\\cpw\\mods\\bootstraplauncher\\1.0.0\\bootstraplauncher-1.0.0.jar").append(separator);
+	        forge.append(engine.getGameFolder().getLibsDir()).append("\\cpw\\mods\\securejarhandler\\1.0.3\\securejarhandler-1.0.3.jar").append(separator);
+	        forge.append(engine.getGameFolder().getLibsDir()).append("\\org\\ow2\\asm\\asm-commons\\9.2\\asm-commons-9.2.jar").append(separator);
+	        forge.append(engine.getGameFolder().getLibsDir()).append("\\org\\ow2\\asm\\asm-util\\9.2\\asm-util-9.2.jar").append(separator);
+	        forge.append(engine.getGameFolder().getLibsDir()).append("\\org\\ow2\\asm\\asm-analysis\\9.2\\asm-analysis-9.2.jar").append(separator);
+	        forge.append(engine.getGameFolder().getLibsDir()).append("\\org\\ow2\\asm\\asm-tree\\9.2\\asm-tree-9.2.jar").append(separator);
+	        forge.append(engine.getGameFolder().getLibsDir()).append("\\org\\ow2\\asm\\asm\\9.2\\asm-9.2.jar");
+	        commands.add(forge.toString());
+	        //System.out.println(forge);
+	        commands.add("--add-modules");
+	        commands.add("ALL-MODULE-PATH");
+	        commands.add("--add-opens");
+	        commands.add("java.base/java.util.jar=cpw.mods.securejarhandler");
+	        commands.add("--add-exports");
+	        commands.add("java.base/sun.security.util=cpw.mods.securejarhandler");
+	        commands.add("--add-exports");
+	        commands.add("jdk.naming.dns/com.sun.jndi.dns=java.naming");
+		}
 		return commands;
 	}
 
