@@ -186,25 +186,6 @@ public class GameRunner {
 		commands.add("-Dfml.ignoreInvalidMinecraftCertificates=true");
 		commands.add("-Dfml.ignorePatchDiscrepancies=true");
 		
-		// forge 1.18 == Resultats des tests non concluants, a regler par la suite. 1.17 ready ?
-//		commands.add("-DignoreList=bootstraplauncher,securejarhandler,asm-commons,asm-util,asm-analysis,asm-tree,asm,client-extra,fmlcore,javafmllanguage,mclanguage,forge-,${version_name}.jar");
-//		commands.add("-DmergeModules=jna-5.8.0.jar,jna-platform-58.0.jar,java-objc-bridge-1.0.0.jar");
-//		commands.add("-DlibraryDirectory=" + engine.getGameFolder().getLibsDir().getAbsolutePath());
-//		commands.add("-p");
-//		commands.add("${library_directory}/cpw/mods/bootstraplauncher/0.1.17/bootstraplauncher-0.1.17.jar${classpath_separator}${library_directory}/cpw/mods/securejarhandler/0.9.54/securejarhandler-0.9.54.jar${classpath_separator}${library_directory}/org/ow2/asm/asm-commons/9.1/asm-commons-9.1.jar${classpath_separator}${library_directory}/org/ow2/asm/asm-util/9.1/asm-util-9.1.jar${classpath_separator}${library_directory}/org/ow2/asm/asm-analysis/9.1/asm-analysis-9.1.jar${classpath_separator}${library_directory}/org/ow2/asm/asm-tree/9.1/asm-tree-9.1.jar${classpath_separator}${library_directory}/org/ow2/asm/asm/9.1/asm-9.1.jar".replace("${library_directory}", engine.getGameFolder().getLibsDir().getAbsolutePath()));
-//		commands.add(engine.getGameFolder().getLibsDir() + "/cpw/mods/bootstraplauncher/0.1.17/bootstraplauncher-0.1.17.jar");
-//		commands.add(engine.getGameFolder().getLibsDir() + "/cpw/mods/securejarhandler/0.9.54/securejarhandler-0.9.54.jar");
-//		commands.add(engine.getGameFolder().getLibsDir() + "/org/ow2/asm/asm-commons/9.1/asm-commons-9.1.jar");
-//		commands.add(engine.getGameFolder().getLibsDir() + "/org/ow2/asm/asm-util/9.1/asm-util-9.1.jar");
-//		commands.add(engine.getGameFolder().getLibsDir() + "/org/ow2/asm/asm-analysis/9.1/asm-analysis-9.1.jar");
-//		commands.add(engine.getGameFolder().getLibsDir() + "/org/ow2/asm/asm-tree/9.1/asm-tree-9.1.jar");
-//		commands.add(engine.getGameFolder().getLibsDir() + "/org/ow2/asm/asm/9.1/asm-9.1.jar");
-		
-//		commands.add("--add-modules ALL-MODULE-PATH");
-//		commands.add("--add-opens java.base/java.util.jar=cpw.mods.securejarhandler");
-//		commands.add("--add-exports java.base/sun.security.util=cpw.mods.securejarhandler");
-//		commands.add("--add-exports jdk.naming.dns/com.sun.jndi.dns=java.naming");
-		
 
 		boolean is32Bit = "32".equals(System.getProperty("sun.arch.data.model"));
 		String defaultArgument = is32Bit ? "-Xmx512M -Xmn128M" : "-Xmx1G -Xmn128M";
