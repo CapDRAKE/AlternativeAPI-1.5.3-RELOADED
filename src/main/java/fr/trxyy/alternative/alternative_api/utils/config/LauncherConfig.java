@@ -28,19 +28,15 @@ public class LauncherConfig {
 	public LauncherConfig(GameEngine engine) {
 		this.gameEngine = engine;
 		String osName = System.getProperty("os.name").toLowerCase();
-		//Pas propre mais temporaire
+		String configDir = System.getProperty("user.home");
+
 		if (osName.contains("win")) {
-			this.launcherConfig = new File(System.getProperty("user.home") + "\\AppData\\Roaming\\launcher_config.json");
+		    configDir += File.separator + "AppData" + File.separator + "Roaming";
+		} else if (osName.contains("mac")) {
+		    configDir += File.separator + "Library" + File.separator + "Application Support";
 		}
-		else if (osName.contains("mac")) {
-			this.launcherConfig = new File(System.getProperty("user.home") + "/Library/Application Support/launcher_config.json");
-		}
-		else if (osName.contains("linux") || osName.contains("unix") || osName.contains("solaris") || osName.contains("sunos")) {
-			this.launcherConfig = new File(System.getProperty("user.home") + "/launcher_config.json");
-		}
-		else {
-			this.launcherConfig = new File(System.getProperty("user.home") + "/launcher_config.json");
-		}
+
+		this.launcherConfig = new File(configDir, "launcher_config.json");
 
 		if (!this.launcherConfig.exists()) {
 			try {
