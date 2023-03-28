@@ -28,21 +28,32 @@ public class FileUtil {
 	 * @throws IOException
 	 */
 	public static void deleteFakeNatives(File targetDir, GameEngine engine) throws IOException {
-		File[] listOfFiles = engine.getGameFolder().getNativesDir().listFiles();
-		for (int index = 0; index < Objects.requireNonNull(listOfFiles).length; index++) {
-			move(engine.getGameFolder().getNativesDir(),engine.getGameFolder().getNativesDir());
-			if (listOfFiles[index].isFile()) {
-				if (!listOfFiles[index].getName().endsWith(".dll")) {
-					if (!listOfFiles[index].getName().endsWith(".dylib")) {
-						if (!listOfFiles[index].getName().endsWith(".so")) {
-							listOfFiles[index].delete();
-						}
-					}
-				}
-			} else {
-				deleteFolder(listOfFiles[index]);
-			}
-		}
+	    int currentPlatform = getPlatform();
+	    File[] listOfFiles = engine.getGameFolder().getNativesDir().listFiles();
+	    for (int index = 0; index < Objects.requireNonNull(listOfFiles).length; index++) {
+	        move(engine.getGameFolder().getNativesDir(), engine.getGameFolder().getNativesDir());
+	        if (listOfFiles[index].isFile()) {
+	            String fileName = listOfFiles[index].getName();
+	            boolean shouldDelete = false;
+	            
+	            if (currentPlatform == 1 || currentPlatform == 2) { // Linux/Unix
+	                shouldDelete = !(fileName.endsWith(".so"));
+	            } else if (currentPlatform == 3) { // Windows
+	                shouldDelete = !(fileName.endsWith(".dll"));
+	            } else if (currentPlatform == 4) { // Mac
+	                shouldDelete = !(fileName.endsWith(".dylib") || fileName.endsWith(".jnilib"));
+	            } else {
+	                // Système d'exploitation inconnu
+	                shouldDelete = true;
+	            }
+	            
+	            if (shouldDelete) {
+	                listOfFiles[index].delete();
+	            }
+	        } else {
+	            deleteFolder(listOfFiles[index]);
+	        }
+	    }
 	}
 
 	/**
@@ -52,53 +63,89 @@ public class FileUtil {
 	 * @throws IOException
 	 */
 	public static void unpackNatives(File targetDir, GameEngine engine) throws IOException {
-		File[] listOfFiles = engine.getGameFolder().getNativesCacheDir().listFiles();
-		for (int index = 0; index < listOfFiles.length; index++) {
-			if (listOfFiles[index].isFile()) {
-				ZipFile zip = new ZipFile(listOfFiles[index]);
-				try {
-					Enumeration<? extends ZipEntry> entries = zip.entries();
-					while (entries.hasMoreElements()) {
-						ZipEntry entry = (ZipEntry) entries.nextElement();
-						File targetFile = new File(targetDir, entry.getName());
-						if (targetFile.getParentFile() != null) {
-							targetFile.getParentFile().mkdirs();
-						}
-						if (!entry.isDirectory()) {
-							BufferedInputStream inputStream = new BufferedInputStream(zip.getInputStream(entry));
+	    int currentPlatform = getPlatform();
+	    File[] listOfFiles = engine.getGameFolder().getNativesCacheDir().listFiles();
+	    for (int index = 0; index < listOfFiles.length; index++) {
+	        if (listOfFiles[index].isFile()) {
+	            ZipFile zip = new ZipFile(listOfFiles[index]);
+	            try {
+	                Enumeration<? extends ZipEntry> entries = zip.entries();
+	                while (entries.hasMoreElements()) {
+	                    ZipEntry entry = (ZipEntry) entries.nextElement();
+	                    String entryName = entry.getName();
 
-							byte[] buffer = new byte[2048];
-							FileOutputStream outputStream = new FileOutputStream(targetFile);
-							BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
-							try {
-								int length;
-								while ((length = inputStream.read(buffer, 0, buffer.length)) != -1) {
-									bufferedOutputStream.write(buffer, 0, length);
-								}
-							} finally {
-								closeSilently(bufferedOutputStream);
-								closeSilently(outputStream);
-								closeSilently(inputStream);
-							}
-						}
-					}
-				} finally {
-					zip.close();
-				}
-			}
-		}
+	                    // Filtrer les natives en fonction du système d'exploitation actuel
+	                    if (currentPlatform == 1 || currentPlatform == 2) { // Linux/Unix
+	                        if (!entryName.endsWith(".so")) {
+	                            continue;
+	                        }
+	                    } else if (currentPlatform == 3) { // Windows
+	                        if (!entryName.endsWith(".dll")) {
+	                            continue;
+	                        }
+	                    } else if (currentPlatform == 4) { // Mac
+	                        if (!entryName.endsWith(".dylib") && !entryName.endsWith(".jnilib")) {
+	                            continue;
+	                        }
+	                    } else {
+	                        // Système d'exploitation inconnu
+	                        continue;
+	                    }
+
+	                    File targetFile = new File(targetDir, entryName);
+	                    if (targetFile.getParentFile() != null) {
+	                        targetFile.getParentFile().mkdirs();
+	                    }
+	                    if (!entry.isDirectory()) {
+	                        BufferedInputStream inputStream = new BufferedInputStream(zip.getInputStream(entry));
+
+	                        byte[] buffer = new byte[2048];
+	                        FileOutputStream outputStream = new FileOutputStream(targetFile);
+	                        BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
+	                        try {
+	                            int length;
+	                            while ((length = inputStream.read(buffer, 0, buffer.length)) != -1) {
+	                                bufferedOutputStream.write(buffer, 0, length);
+	                            }
+	                        } finally {
+	                            closeSilently(bufferedOutputStream);
+	                            closeSilently(outputStream);
+	                            closeSilently(inputStream);
+	                        }
+	                    }
+	                }
+	            } finally {
+	                zip.close();
+	            }
+	        }
+	    }
 	}
-
+	
+	
 	private static void move(File toDir, File currDir) {
-		for (File file : currDir.listFiles()) {
-			if (file.isDirectory()) {
-				move(toDir, file);
-			} else {
-				if (file.getName().endsWith(".dll") || file.getName().endsWith(".dylib") || file.getName().endsWith(".so")) {
-					file.renameTo(new File(toDir, file.getName()));
-				}
-			}
-		}
+	    for (File file : currDir.listFiles()) {
+	        if (file.isDirectory()) {
+	            move(toDir, file);
+	        } else {
+	            if (shouldBeMoved(file.getName())) {
+	                file.renameTo(new File(toDir, file.getName()));
+	            }
+	        }
+	    }
+	}
+	
+	private static boolean shouldBeMoved(String fileName) {
+	    int currentPlatform = getPlatform();
+	    boolean shouldMove = false;
+
+	    if (currentPlatform == 1 || currentPlatform == 2) { // Linux/Unix
+	        shouldMove = fileName.endsWith(".so");
+	    } else if (currentPlatform == 3) { // Windows
+	        shouldMove = fileName.endsWith(".dll");
+	    } else if (currentPlatform == 4) { // Mac
+	        shouldMove = fileName.endsWith(".dylib") || fileName.endsWith(".jnilib");
+	    }
+	    return shouldMove;
 	}
 
 	/**
@@ -130,30 +177,27 @@ public class FileUtil {
 	}
 
 	/**
-	 * 
-	 * @param file The File
-	 * @return
-	 * @throws IOException
+	 * Checks if a file is a symbolic link.
+	 *
+	 * @param file The file to check.
+	 * @return true if the file is a symbolic link, false otherwise.
+	 * @throws IOException if an I/O error occurs.
 	 */
 	public static boolean isSymlink(File file) throws IOException {
-		if (file == null) {
-			throw new NullPointerException("File must not be null");
-		}
-		char WINDOWS_SEPARATOR = '\\';
-		if (File.separatorChar == WINDOWS_SEPARATOR) {
-			return false;
-		}
-		File fileInCanonicalDir = null;
-		if (file.getParent() == null) {
-			fileInCanonicalDir = file;
-		} else {
-			File canonicalDir = file.getParentFile().getCanonicalFile();
-			fileInCanonicalDir = new File(canonicalDir, file.getName());
-		}
-		if (fileInCanonicalDir.getCanonicalFile().equals(fileInCanonicalDir.getAbsoluteFile())) {
-			return false;
-		}
-		return true;
+	    if (file == null) {
+	        throw new NullPointerException("File must not be null");
+	    }
+	    File fileInCanonicalDir = null;
+	    if (file.getParent() == null) {
+	        fileInCanonicalDir = file;
+	    } else {
+	        File canonicalDir = file.getParentFile().getCanonicalFile();
+	        fileInCanonicalDir = new File(canonicalDir, file.getName());
+	    }
+	    if (fileInCanonicalDir.getCanonicalFile().equals(fileInCanonicalDir.getAbsoluteFile())) {
+	        return false;
+	    }
+	    return true;
 	}
 
 	/**
@@ -191,11 +235,7 @@ public class FileUtil {
 	 * @return The Charset
 	 */
 	public static Charset getCharset() {
-		try {
-			return Charset.forName("UTF-8");
-		} catch (Exception var1) {
-			throw new Error("UTF-8 is not supported", var1);
-		}
+	    return Charset.forName("UTF-8");
 	}
 
 	/**
@@ -377,4 +417,24 @@ public class FileUtil {
 		}
 		return result;
 	}
+	
+    /**
+     * @return The current Platform
+     */
+    private static int getPlatform() {
+        String osName = System.getProperty("os.name").toLowerCase();
+        if (osName.contains("linux"))
+            return 1;
+        if (osName.contains("unix"))
+            return 1;
+        if (osName.contains("solaris"))
+            return 2;
+        if (osName.contains("sunos"))
+            return 2;
+        if (osName.contains("win"))
+            return 3;
+        if (osName.contains("mac"))
+            return 4;
+        return 5;
+    }
 }

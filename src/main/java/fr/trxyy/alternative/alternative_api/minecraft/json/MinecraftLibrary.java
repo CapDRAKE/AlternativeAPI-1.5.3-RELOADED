@@ -18,7 +18,7 @@ public class MinecraftLibrary {
 	/**
 	 * The Substitutor
 	 */
-	private Substitutor SUBSTITUTOR = new Substitutor(new HashMap() {});
+	private Substitutor SUBSTITUTOR = new Substitutor(new HashMap<String, String>());
 	/**
 	 * The library name
 	 */
@@ -93,13 +93,13 @@ public class MinecraftLibrary {
 			this.extract = new MinecraftRules(library.extract);
 		}
 		if (library.rules != null) {
-			this.rules = new ArrayList();
+			this.rules = new ArrayList<CompatibilityRule>();
 			for (CompatibilityRule compatibilityRule : library.rules) {
 				this.rules.add(new CompatibilityRule(compatibilityRule));
 			}
 		}
 		if (library.natives != null) {
-			this.natives = new LinkedHashMap();
+			this.natives = new LinkedHashMap<OperatingSystem, String>();
 			for (Map.Entry<OperatingSystem, String> entry : library.getNatives().entrySet()) {
 				this.natives.put(entry.getKey(), entry.getValue());
 			}
@@ -123,7 +123,7 @@ public class MinecraftLibrary {
 			throw new IllegalArgumentException("Cannot add native for null or empty name");
 		}
 		if (this.natives == null) {
-			this.natives = new EnumMap(OperatingSystem.class);
+			this.natives = new EnumMap<OperatingSystem, String>(OperatingSystem.class);
 		}
 		this.natives.put(operatingSystem, name);
 		return this;

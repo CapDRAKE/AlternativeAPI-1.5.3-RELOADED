@@ -21,6 +21,7 @@ public class GameUtils {
         switch (getPlatform()) {
             case 1:
                 workingDirectory = new File(userHome + "/." + workDir);
+                break;
             case 2:
                 workingDirectory = new File(userHome + "/." + workDir);
                 break;
