@@ -32,7 +32,7 @@ public class GameUpdater extends Thread {
     /**
      * The Host to check for offline
      */
-    private String HOST = "http://www.google.com";
+    private String HOST = "https://www.google.com";
     /**
      * The Minecraft Version from Json
      */
