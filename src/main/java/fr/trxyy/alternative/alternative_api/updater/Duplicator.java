@@ -7,32 +7,19 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-/**
- * @author Trxyy
- */
 public class Duplicator extends Thread {
-	/**
-	 * The source file
-	 */
-	private File source;
-	/**
-	 * The destination file
-	 */
-	private File dest;
+	private final File source;
+	private final File dest;
 
-	/**
-	 * The Constructor
-	 * @param source The source file
-	 * @param dest The destination file
-	 */
 	public Duplicator(File source, File dest) {
+		if (source == null || dest == null) {
+			throw new IllegalArgumentException("Source and destination files cannot be null");
+		}
 		this.source = source;
 		this.dest = dest;
 	}
 
-	/**
-	 * Run the Thread
-	 */
+	@Override
 	public void run() {
 		try {
 			startCloning();
@@ -41,24 +28,19 @@ public class Duplicator extends Thread {
 		}
 	}
 
-	/**
-	 * Start Cloning the file in question
-	 * @throws IOException
-	 */
 	private void startCloning() throws IOException {
-		InputStream input = null;
-		OutputStream output = null;
-		try {
-			input = new FileInputStream(this.source);
-			output = new FileOutputStream(this.dest);
+		if (!source.exists()) {
+			throw new IOException("Source file does not exist: " + source);
+		}
+
+		try (InputStream input = new FileInputStream(this.source);
+			 OutputStream output = new FileOutputStream(this.dest)) {
+
 			byte[] buf = new byte[1024];
 			int bytesRead;
 			while ((bytesRead = input.read(buf)) > 0) {
 				output.write(buf, 0, bytesRead);
 			}
-		} finally {
-			input.close();
-			output.close();
 		}
 	}
 }
