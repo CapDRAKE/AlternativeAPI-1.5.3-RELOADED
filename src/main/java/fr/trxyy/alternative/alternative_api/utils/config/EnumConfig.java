@@ -20,7 +20,8 @@ public enum EnumConfig {
 	USE_CONNECT("useConnect", false),
 	PASSWORD("password", ""),
 	REMEMBER_ME("rememberme", false),
-	DATE("date", "");
+	DATE("date", ""),
+	LANGUAGE("language","Français");
 	
 	public String option;
 	public Object def;

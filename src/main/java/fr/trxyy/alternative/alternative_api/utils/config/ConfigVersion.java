@@ -84,6 +84,8 @@ public boolean useMicrosoft;
 	public boolean usevmarguments;
 	
 	public String date;
+	
+	public String language;
 
 	/**
 	 * The Constructor
@@ -109,6 +111,11 @@ public boolean useMicrosoft;
 		this.rememberme = o.rememberme;
 		this.usePremium = o.usePremium;
 		this.date = o.date;
+		this.language = o.language;
+	}
+	
+	public String getLanguage() {
+		return this.language;
 	}
 	
 	public String getDate() {
