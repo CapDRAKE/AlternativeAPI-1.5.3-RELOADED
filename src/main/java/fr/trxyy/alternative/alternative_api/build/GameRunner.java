@@ -144,7 +144,7 @@ public class GameRunner {
 			commands.addAll(this.getForgeJVMArguments());
 			Logger.log(String.valueOf(this.getForgeJVMArguments()));
 		}
-		//commands.add("-Dbsl.debug=True");
+		commands.add("-Dbsl.debug=True"); // important to debug
 
 		if (os.equals(OperatingSystem.OSX)) {
 			commands.add("-Xdock:name=Minecraft");

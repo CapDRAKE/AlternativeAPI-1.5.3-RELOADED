@@ -235,9 +235,15 @@ public class MinecraftLibrary {
 	 */
 	public String getArtifactNatives(String libArg) {
 		String[] split = getName().split(":");
-		String libName = split[1];
-		String libVersion = split[2];
-		return libName + "-" + libVersion + "-" + libArg + ".jar";
+		if (split.length == 3) {
+			String libName = split[1];
+			String libVersion = split[2];
+			return libName + "-" + libVersion + "-natives-" + libArg + ".jar";
+		}
+		String libName = getDownloads().getArtifact().getUrl().getPath().split("/")[
+				getDownloads().getArtifact().getUrl().getPath().split("/").length-1
+				];
+		return libName;
 	}
 
 	/**

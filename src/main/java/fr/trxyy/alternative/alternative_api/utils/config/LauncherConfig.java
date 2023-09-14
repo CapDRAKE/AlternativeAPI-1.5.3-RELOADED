@@ -114,6 +114,7 @@ public class LauncherConfig {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+		this.loadConfiguration();
 	}
 	
 	/**
