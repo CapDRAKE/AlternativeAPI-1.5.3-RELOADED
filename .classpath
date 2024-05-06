@@ -12,7 +12,6 @@
 	<classpathentry kind="lib" path="src/main/resources/jfxswt.jar"/>
 	<classpathentry kind="lib" path="src/main/resources/commons-codec-1.10.jar"/>
 	<classpathentry kind="lib" path="src/main/resources/guava-23.0.jar"/>
-	<classpathentry kind="lib" path="src/main/resources/AlternativeAuth.jar"/>
 	<classpathentry kind="lib" path="src/main/resources/commons-cli-1.5.0.jar"/>
 	<classpathentry kind="lib" path="src/main/resources/json_simple.jar"/>
 	<classpathentry kind="lib" path="src/main/resources/junit-4.13.2.jar"/>
@@ -29,5 +28,6 @@
 	<classpathentry kind="lib" path="src/main/resources/lwjgl-platform-2.9.1-natives-windows.jar"/>
 	<classpathentry kind="lib" path="src/main/resources/openlauncherlib-3.1.7.jar"/>
 	<classpathentry kind="lib" path="src/main/resources/PluginLoaderAPI-94e88e0.jar"/>
+	<classpathentry kind="lib" path="src/main/resources/AlternativeAuth.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

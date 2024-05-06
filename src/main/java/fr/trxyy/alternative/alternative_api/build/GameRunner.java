@@ -239,6 +239,7 @@ public class GameRunner {
 
 		/** ----- Direct connect to a server if required. ----- */
 		if (engine.getGameConnect() != null) {
+			System.out.println(engine.getGameConnect().getIp() + " " + engine.getGameConnect().getPort() );
 			commands.add("--server=" + engine.getGameConnect().getIp());
 			commands.add("--port=" + engine.getGameConnect().getPort());
 		}

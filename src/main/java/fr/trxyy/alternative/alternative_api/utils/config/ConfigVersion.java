@@ -211,6 +211,10 @@ public boolean useMicrosoft;
 		return this.useConnect;
 	}
 	
+	public boolean useConnect2() {
+		return useConnect;
+	}
+	
 	public boolean isRememberme() {
 		return rememberme;
 	}
