@@ -197,7 +197,7 @@ public class GameRunner {
 		commands.addAll(args);
 
 		commands.add("-cp");
-		commands.add("\"" + GameUtils.constructClasspath(engine) + "\"");
+		commands.add(GameUtils.constructClasspath(engine));
 		commands.add(engine.getGameStyle().getMainClass());
 
 		/** ----- Minecraft Arguments ----- */
@@ -240,8 +240,10 @@ public class GameRunner {
 		/** ----- Direct connect to a server if required. ----- */
 		if (engine.getGameConnect() != null) {
 			System.out.println(engine.getGameConnect().getIp() + " " + engine.getGameConnect().getPort() );
-			commands.add("--server=" + engine.getGameConnect().getIp());
-			commands.add("--port=" + engine.getGameConnect().getPort());
+			commands.add("--server");
+			commands.add(engine.getGameConnect().getIp());
+			commands.add("--port");
+			commands.add(String.valueOf(engine.getGameConnect().getPort()));
 		}
 
 		/** ----- Tweak Class if required ----- */
@@ -249,7 +251,15 @@ public class GameRunner {
 			commands.add("--tweakClass");
 			commands.add(engine.getGameStyle().getTweakArgument());
 		}
-		return commands;
+	    /** ----- Filtrage des paramètres quickPlay* ----- */
+	    commands.removeIf(arg -> arg.startsWith("--quickPlay"));
+	    
+	    /** ----- Suppression des arguments vides ----- */
+	    commands.removeIf(arg -> arg.trim().isEmpty());
+
+	    /** ----- Log complet de la commande de lancement ----- */
+	    Logger.log("Commande de lancement complète : " + String.join(" ", commands));
+	    return commands;
 	}
 
 	private List<String> getForgeJVMArguments() {
