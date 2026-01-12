@@ -13,7 +13,6 @@ import fr.trxyy.alternative.alternative_api.GameEngine;
 import fr.trxyy.alternative.alternative_api.utils.Logger;
 import fr.trxyy.alternative.alternative_api.utils.Mover;
 import fr.trxyy.alternative.alternative_api.utils.ResourceLocation;
-import fr.trxyy.alternative.alternative_api_ui.components.LauncherRectangle;
 import javafx.animation.AnimationTimer;
 import javafx.animation.FadeTransition;
 import javafx.embed.swing.SwingFXUtils;
@@ -160,6 +159,7 @@ public class IScreen {
 	 * Open a link
 	 * @param urlString The url to open
 	 */
+	@SuppressWarnings("deprecation")
 	public void openLink(String urlString) {
 		try {
 			Desktop.getDesktop().browse(new URL(urlString).toURI());

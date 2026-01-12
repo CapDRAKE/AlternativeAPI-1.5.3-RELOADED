@@ -58,7 +58,8 @@ public class Downloader extends Thread {
 			engine.getGameUpdater().setCurrentInfoText("Telechargement d'une librairie.");
 		}
 
-		try (BufferedInputStream bufferedInputStream = new BufferedInputStream(new URL(this.url.replace(" ", "%20")).openConnection().getInputStream());
+		try (@SuppressWarnings("deprecation")
+		BufferedInputStream bufferedInputStream = new BufferedInputStream(new URL(this.url.replace(" ", "%20")).openConnection().getInputStream());
 			 FileOutputStream fileOutputStream = new FileOutputStream(this.file)) {
 
 			byte[] data = new byte[1024];

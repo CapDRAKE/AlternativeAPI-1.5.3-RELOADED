@@ -7,7 +7,6 @@ import java.io.FileOutputStream;
 import java.net.HttpURLConnection;
 import java.net.Proxy;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -35,6 +34,7 @@ public class GameParser {
 	public static void getFilesToDownload(GameEngine engine) {
 		downloadXMLFile(engine);
 		try {
+			@SuppressWarnings("deprecation")
 			final URL resourceUrl = new URL(engine.getGameLinks().getCustomFilesUrl());
 			final DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
 			final DocumentBuilder db = dbf.newDocumentBuilder();
@@ -107,6 +107,7 @@ public class GameParser {
 	public static void getFilesToDownloadOffline(GameEngine engine) {
 		try {
 			File f = new File(engine.getGameFolder().getCacheDir(), "downloads.xml");
+			@SuppressWarnings("deprecation")
 			final URL resourceUrl = new URL(f.toURL().toString());
 			final DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
 			final DocumentBuilder db = dbf.newDocumentBuilder();
@@ -177,6 +178,7 @@ public class GameParser {
 		File theFile = new File(engine.getGameFolder().getCacheDir(), "downloads.xml");
 		GameVerifier.addToFileList(theFile.getAbsolutePath().replace(engine.getGameFolder().getCacheDir().getAbsolutePath(), "").replace('/', File.separatorChar));
 		try {
+			@SuppressWarnings("deprecation")
 			URL url = new URL(engine.getGameLinks().getCustomFilesUrl());
 			HttpURLConnection connection = (HttpURLConnection) url.openConnection();
 			float totalDataRead = 0;

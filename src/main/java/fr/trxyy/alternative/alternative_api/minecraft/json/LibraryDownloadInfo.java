@@ -29,7 +29,7 @@ public class LibraryDownloadInfo {
 	public LibraryDownloadInfo(LibraryDownloadInfo other) {
 		this.artifact = other.artifact;
 		if (other.classifiers != null) {
-			this.classifiers = new LinkedHashMap();
+			this.classifiers = new LinkedHashMap<>();
 			for (Map.Entry<String, DownloadInfo> entry : other.classifiers.entrySet()) {
 				this.classifiers.put(entry.getKey(), new DownloadInfo((DownloadInfo) entry.getValue()));
 			}

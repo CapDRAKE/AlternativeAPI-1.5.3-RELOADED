@@ -12,7 +12,7 @@ public class MinecraftRules {
 	/**
 	 * The excludes in a List
 	 */
-	private List<String> exclude = new ArrayList();
+	private List<String> exclude = new ArrayList<>();
 
 	/**
 	 * The Constructor
@@ -35,7 +35,7 @@ public class MinecraftRules {
 	 * @param rules The minecraft rules
 	 */
 	public MinecraftRules(MinecraftRules rules) {
-		Iterator var3 = rules.exclude.iterator();
+		Iterator<?> var3 = rules.exclude.iterator();
 		while (var3.hasNext()) {
 			String exclude = (String) var3.next();
 			this.exclude.add(exclude);
@@ -53,7 +53,7 @@ public class MinecraftRules {
 		if (this.exclude == null) {
 			return true;
 		}
-		Iterator var3 = this.exclude.iterator();
+		Iterator<String> var3 = this.exclude.iterator();
 		while (var3.hasNext()) {
 			String rule = (String) var3.next();
 			if (path.startsWith(rule)) {

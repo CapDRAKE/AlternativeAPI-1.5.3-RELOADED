@@ -194,6 +194,7 @@ public enum OperatingSystem {
 	 * Open a folder
 	 * @param path The Folder Path
 	 */
+	@SuppressWarnings("deprecation")
 	public static void openFolder(final File path) {
 		final String absolutePath = path.getAbsolutePath();
 		final OperatingSystem os = getCurrentPlatform();

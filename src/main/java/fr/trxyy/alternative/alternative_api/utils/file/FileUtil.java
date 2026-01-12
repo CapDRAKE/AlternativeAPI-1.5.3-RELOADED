@@ -43,7 +43,7 @@ public class FileUtil {
 	            } else if (currentPlatform == 4) { // Mac
 	                shouldDelete = !(fileName.endsWith(".dylib") || fileName.endsWith(".jnilib"));
 	            } else {
-	                // Système d'exploitation inconnu
+	                // Systï¿½me d'exploitation inconnu
 	                shouldDelete = true;
 	            }
 	            
@@ -74,7 +74,7 @@ public class FileUtil {
 	                    ZipEntry entry = (ZipEntry) entries.nextElement();
 	                    String entryName = entry.getName();
 
-	                    // Filtrer les natives en fonction du système d'exploitation actuel
+	                    // Filtrer les natives en fonction du systï¿½me d'exploitation actuel
 	                    if (currentPlatform == 1 || currentPlatform == 2) { // Linux/Unix
 	                        if (!entryName.endsWith(".so")) {
 	                            continue;
@@ -88,7 +88,7 @@ public class FileUtil {
 	                            continue;
 	                        }
 	                    } else {
-	                        // Système d'exploitation inconnu
+	                        // Systï¿½me d'exploitation inconnu
 	                        continue;
 	                    }
 
@@ -402,6 +402,7 @@ public class FileUtil {
 	 * @param url The URL to read
 	 * @return The result of the url
 	 */
+	@SuppressWarnings("deprecation")
 	public static String readMD5(String url) {
 		String result = "";
 		try {

@@ -371,7 +371,8 @@ public class GameUpdater extends Thread {
     /**
      * Download Minecraft Json version at Every Launch to be up to date.
      */
-    public void downloadVersion() {
+    @SuppressWarnings("deprecation")
+	public void downloadVersion() {
         File theFile = new File(engine.getGameFolder().getCacheDir(), engine.getGameLinks().getJsonName());
         GameVerifier.addToFileList(theFile.getAbsolutePath().replace(engine.getGameFolder().getCacheDir().getAbsolutePath(), "").replace('/', File.separatorChar));
         try {
@@ -429,7 +430,7 @@ public class GameUpdater extends Thread {
     /**
      * Update minecraft libraries
      */
-    @SuppressWarnings("unlikely-arg-type")
+    @SuppressWarnings({ "unlikely-arg-type", "unused" })
     public void updateJars() {
         for (MinecraftLibrary lib : minecraftVersion.getLibraries()) {
             File libPath = new File(engine.getGameFolder().getLibsDir(), lib.getArtifactPath());
@@ -529,7 +530,8 @@ public class GameUpdater extends Thread {
         return name.split(":")[1];
     }
 
-    private void update1_19_HighersLibraries() {
+    @SuppressWarnings("unused")
+	private void update1_19_HighersLibraries() {
         for (MinecraftLibrary lib : minecraftVersion.getLibraries()) {
             File libPath = new File(engine.getGameFolder().getLibsDir(), lib.getDownloads().getArtifact().getPath());
             GameVerifier.addToFileList(
@@ -762,7 +764,8 @@ public class GameUpdater extends Thread {
     /**
      * Index Minecraft local version json
      */
-    public void indexLocalVersion() {
+    @SuppressWarnings("deprecation")
+	public void indexLocalVersion() {
         File f = new File(engine.getGameFolder().getCacheDir(), engine.getGameLinks().getJsonName());
         String json = null;
         try {
@@ -776,7 +779,8 @@ public class GameUpdater extends Thread {
         }
     }
 
-    private void indexLocalForge() {
+    @SuppressWarnings("deprecation")
+	private void indexLocalForge() {
         File f = new File(engine.getGameFolder().getCacheDir(), "forge.json");
         String json = null;
         try {
@@ -946,7 +950,8 @@ public class GameUpdater extends Thread {
     /**
      * @return If the host is reachable
      */
-    public boolean isOnline() {
+    @SuppressWarnings("deprecation")
+	public boolean isOnline() {
         try {
             URL url = new URL(HOST);
             URLConnection connection = url.openConnection();

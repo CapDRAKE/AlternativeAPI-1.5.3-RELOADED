@@ -20,6 +20,7 @@ public class LowerCaseEnumTypeAdapterFactory implements TypeAdapterFactory {
 	/**
 	 * Create a Type Adapter
 	 */
+	@SuppressWarnings("unchecked")
 	public <T> TypeAdapter<T> create(final Gson gson, final TypeToken<T> type) {
 		final Class<T> rawType = (Class<T>) type.getRawType();
 		if (!rawType.isEnum()) {

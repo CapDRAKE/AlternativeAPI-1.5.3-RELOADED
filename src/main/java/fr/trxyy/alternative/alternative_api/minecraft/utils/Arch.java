@@ -15,14 +15,6 @@ public enum Arch {
 	 */
 	public static final int MIN_MEMORY = 512;
 	/**
-	 * The bit
-	 */
-	private final int bit;
-	/**
-	 * The arc
-	 */
-	private final int arch;
-	/**
 	 * The sBit
 	 */
 	private final String sBit;
@@ -36,14 +28,12 @@ public enum Arch {
 	 * @param bit The bit
 	 */
 	private Arch(int bit) {
-		this.bit = bit;
 		this.sBit = String.valueOf(bit);
 		if (bit == 0) {
 			this.sArch = toString();
-			this.arch = 0;
 		} else {
 			this.sArch = toString().substring(1);
-			this.arch = Integer.parseInt(this.sArch);
+			Integer.parseInt(this.sArch);
 		}
 	}
 	

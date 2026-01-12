@@ -26,6 +26,7 @@ public class HastebinSender {
 	 * @return A String with the response
 	 * @throws IOException
 	 */
+	@SuppressWarnings("deprecation")
 	public String postError(String text, boolean raw) throws IOException {
 		byte[] postData = text.getBytes(StandardCharsets.UTF_8);
 		int postDataLength = postData.length;

@@ -36,6 +36,7 @@ public class JsonUtil {
 	 * @return A String with the Json
 	 * @throws IOException
 	 */
+	@SuppressWarnings("deprecation")
 	public static String loadJSON(String inUrl) throws IOException {
 		URL url = new URL(inUrl);
 		BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));

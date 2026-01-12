@@ -1,7 +1,5 @@
 package fr.trxyy.alternative.alternative_api.utils.config;
 
-import java.util.Date;
-
 public class ConfigVersion {
 
 	

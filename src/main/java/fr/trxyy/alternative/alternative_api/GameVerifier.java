@@ -12,7 +12,6 @@ import java.util.List;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.TrueFileFilter;
 
-import fr.trxyy.alternative.alternative_api.utils.Logger;
 import fr.trxyy.alternative.alternative_api.utils.file.FileUtil;
 
 /**
@@ -156,6 +155,7 @@ public class GameVerifier {
 	/**
 	 * Getting the ignore list from URL
 	 */
+	@SuppressWarnings("deprecation")
 	public void getIgnoreList() {
 		URL url = null;
 		BufferedReader read = null;
@@ -194,6 +194,7 @@ public class GameVerifier {
 	/**
 	 * Getting the delete list from URL
 	 */
+	@SuppressWarnings("deprecation")
 	public void getDeleteList() {
 		URL url = null;
 		BufferedReader read = null;

@@ -43,6 +43,7 @@ public class GameMaintenance {
 	 * @throws IOException
 	 */
 	public String readMaintenance() throws IOException {
+		@SuppressWarnings("deprecation")
 		URL oracle = new URL(this.engine.getGameLinks().getMaintenanceUrl());
 		BufferedReader in = new BufferedReader(new InputStreamReader(oracle.openStream()));
 		String s = "";

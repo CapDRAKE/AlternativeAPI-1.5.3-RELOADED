@@ -89,6 +89,7 @@ public class DownloadInfo {
 	 * @param input The URL
 	 * @return A URL
 	 */
+	@SuppressWarnings("deprecation")
 	public static URL constantURL(String input) {
 		try {
 			return new URL(input);

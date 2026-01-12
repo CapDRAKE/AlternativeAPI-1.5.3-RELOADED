@@ -91,6 +91,7 @@ public class GameRunner {
      * Open a link
      * @param urlString The url to open
      */
+	@SuppressWarnings("deprecation")
 	public void openLink(String urlString) {
 		try {
 			Desktop.getDesktop().browse(new URL(urlString).toURI());
@@ -251,14 +252,14 @@ public class GameRunner {
 			commands.add("--tweakClass");
 			commands.add(engine.getGameStyle().getTweakArgument());
 		}
-	    /** ----- Filtrage des paramètres quickPlay* ----- */
+	    /** ----- Filtrage des paramï¿½tres quickPlay* ----- */
 	    commands.removeIf(arg -> arg.startsWith("--quickPlay"));
 	    
 	    /** ----- Suppression des arguments vides ----- */
 	    commands.removeIf(arg -> arg.trim().isEmpty());
 
 	    /** ----- Log complet de la commande de lancement ----- */
-	    Logger.log("Commande de lancement complète : " + String.join(" ", commands));
+	    Logger.log("Commande de lancement complï¿½te : " + String.join(" ", commands));
 	    return commands;
 	}
 
@@ -285,6 +286,7 @@ public class GameRunner {
 	 * Get minecraft launch arguments for old versions of Minecraft
 	 * @return a String[] with multiples arguments
 	 */
+	@SuppressWarnings("deprecation")
 	private String[] getArgumentsOlder() {
 		final Map<String, String> map = new HashMap<String, String>();
 		final StrSubstitutor substitutor = new StrSubstitutor(map);
@@ -311,6 +313,7 @@ public class GameRunner {
 	 * @param args The arguments from json as a List
 	 * @return a String[] with multiples arguments
 	 */
+	@SuppressWarnings("deprecation")
 	private String[] getArgumentsNewer(List<Argument> args) {
 		final Map<String, String> map = new HashMap<String, String>();
 		final StrSubstitutor substitutor = new StrSubstitutor(map);
