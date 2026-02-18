@@ -84,6 +84,8 @@ public boolean useMicrosoft;
 	public String date;
 	
 	public String language;
+	
+	public boolean CFG_INCLUDE_SNAPSHOTS;
 
 	/**
 	 * The Constructor
@@ -110,6 +112,7 @@ public boolean useMicrosoft;
 		this.usePremium = o.usePremium;
 		this.date = o.date;
 		this.language = o.language;
+		this.CFG_INCLUDE_SNAPSHOTS = o.CFG_INCLUDE_SNAPSHOTS;
 	}
 	
 	public String getLanguage() {
@@ -215,6 +218,10 @@ public boolean useMicrosoft;
 	
 	public boolean isRememberme() {
 		return rememberme;
+	}
+	
+	public boolean useSnapshot() {
+		return CFG_INCLUDE_SNAPSHOTS;
 	}
 
 	public static ConfigVersion getInstance() {

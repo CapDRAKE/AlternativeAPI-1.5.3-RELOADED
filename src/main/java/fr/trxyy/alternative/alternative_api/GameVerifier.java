@@ -2,10 +2,12 @@ package fr.trxyy.alternative.alternative_api;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,7 +20,7 @@ import fr.trxyy.alternative.alternative_api.utils.file.FileUtil;
  * @author Trxyy
  */
 public class GameVerifier {
-	
+
 	/**
 	 * The GameEngine instance
 	 */
@@ -43,7 +45,7 @@ public class GameVerifier {
 	 * The delete list (files forced to be deleted)
 	 */
 	public List<String> deleteList = new ArrayList<String>();
-	
+
 	/**
 	 * The Constructor
 	 * @param gameEngine The instance of GameEngine
@@ -51,178 +53,254 @@ public class GameVerifier {
 	public GameVerifier(GameEngine gameEngine) {
 		this.engine = gameEngine;
 	}
-	
+
 	/**
 	 * Verify files to ignore/delete
 	 */
+	@SuppressWarnings("unchecked")
 	public void verify() {
-		this.filesList = (List<File>)FileUtils.listFiles(this.engine.getGameFolder().getBinDir(), TrueFileFilter.INSTANCE, TrueFileFilter.INSTANCE);
+		if (this.engine == null || this.engine.getGameFolder() == null || this.engine.getGameFolder().getBinDir() == null) {
+			return;
+		}
+
+		this.filesList = (List<File>) FileUtils.listFiles(
+				this.engine.getGameFolder().getBinDir(),
+				TrueFileFilter.INSTANCE,
+				TrueFileFilter.INSTANCE
+		);
+
+		final String gameDirAbs = this.engine.getGameFolder().getGameDir().getAbsolutePath();
+		final String jsonName = (this.engine.getGameLinks() != null) ? this.engine.getGameLinks().getJsonName() : null;
+
 		for (File file : this.filesList) {
-			
-			if (file.getAbsolutePath().endsWith(engine.getGameLinks().getJsonName())) {
+
+			// ne touche pas au json
+			if (jsonName != null && file.getAbsolutePath().endsWith(jsonName)) {
 				continue;
 			}
-			if (engine.getMinecraftVersion().getLogging() != null) {
-				if (file.getAbsolutePath().endsWith(engine.getMinecraftVersion().getLogging().getClient().getFile().getId())) {
-					continue;
+
+			// ne touche pas au fichier logging (si présent)
+			if (engine.getMinecraftVersion() != null && engine.getMinecraftVersion().getLogging() != null) {
+				try {
+					String loggingId = engine.getMinecraftVersion().getLogging().getClient().getFile().getId();
+					if (loggingId != null && file.getAbsolutePath().endsWith(loggingId)) {
+						continue;
+					}
+				} catch (Exception ignored) {
+					// si le logging est mal formé, on n'explose pas
 				}
 			}
-			
+
+			// ne touche pas à downloads.xml
 			if (file.getAbsolutePath().endsWith("downloads.xml")) {
 				continue;
 			}
-			
-			if (existInDeleteList(file.getAbsolutePath().replace(this.engine.getGameFolder().getGameDir().getAbsolutePath(), ""))) {
+
+			String relativePath = file.getAbsolutePath().replace(gameDirAbs, "");
+
+			// delete forcé
+			if (existInDeleteList(relativePath)) {
 				FileUtil.deleteSomething(file.getAbsolutePath());
+				continue;
 			}
-			
-			if (!existInAllowedFiles(file.getAbsolutePath().replace(this.engine.getGameFolder().getGameDir().getAbsolutePath(), ""))) {
-				if (existInIgnoreListFolder(file.getParent().replace(this.engine.getGameFolder().getGameDir().getAbsolutePath(), ""))) {
+
+			// pas dans allowed => potentiellement supprimé, sauf si ignoré
+			if (!existInAllowedFiles(relativePath)) {
+				String parentRel = file.getParent().replace(gameDirAbs, "");
+
+				if (existInIgnoreListFolder(parentRel)) {
 					continue;
 				}
-				else if (existInIgnoreList(file.getAbsolutePath().replace(this.engine.getGameFolder().getGameDir().getAbsolutePath(), ""))) {
+				if (existInIgnoreList(relativePath)) {
 					continue;
 				}
-				else {
-					FileUtil.deleteSomething(file.getAbsolutePath());
-				}
+
+				FileUtil.deleteSomething(file.getAbsolutePath());
 			}
 		}
 	}
-	
+
 	/**
-	 * Add files to addlowed files list
+	 * Add files to allowed files list
 	 * @param allowed The file to add
 	 */
 	public static void addToFileList(String allowed) {
 		allowedFiles.add(allowed);
 	}
-	
+
+	private boolean isBlank(String s) {
+		return s == null || s.trim().isEmpty();
+	}
+
+	private String normalizeSeparators(String s) {
+		if (s == null) return null;
+		// pour matcher correctement sous Windows/Linux
+		return s.replace('/', File.separatorChar).replace('\\', File.separatorChar);
+	}
+
 	/**
 	 * Check if the file exist in the ignore list
 	 * @param search The file path to search
 	 * @return If the file exist
 	 */
 	public boolean existInIgnoreList(String search) {
-		for(String str: this.ignoreList) {
-		    if(str.trim().contains(search))
-		       return true;
+		if (isBlank(search)) return false;
+		for (String str : this.ignoreList) {
+			if (str != null && str.trim().contains(search)) {
+				return true;
+			}
 		}
 		return false;
 	}
-	
+
 	/**
 	 * Check if the file exist in the ignore folder
 	 * @param search The file path to search
 	 * @return If the file exist
 	 */
 	public boolean existInIgnoreListFolder(String search) {
-		String newSearch = search + "\\";
-		for(String str: this.ignoreListFolder) {
-		    if(newSearch.contains(str)) {
-			       return true;
-		    }
+		if (isBlank(search)) return false;
+
+		String newSearch = normalizeSeparators(search);
+		if (!newSearch.endsWith(File.separator)) {
+			newSearch = newSearch + File.separator;
+		}
+
+		for (String str : this.ignoreListFolder) {
+			if (isBlank(str)) continue;
+
+			String folder = normalizeSeparators(str);
+			if (!folder.endsWith(File.separator)) {
+				folder = folder + File.separator;
+			}
+
+			if (newSearch.contains(folder)) {
+				return true;
+			}
 		}
 		return false;
 	}
-	
+
 	/**
 	 * Check if the file exist in allowed files
 	 * @param search The file path to search
 	 * @return If the file exist
 	 */
 	public boolean existInAllowedFiles(String search) {
+		if (isBlank(search)) return false;
 		for (String str : allowedFiles) {
-			if (str.trim().contains(search))
+			if (str != null && str.trim().contains(search)) {
 				return true;
+			}
 		}
 		return false;
 	}
-	
+
 	/**
-	 * Check if the file existe in the delete list
+	 * Check if the file exist in the delete list
 	 * @param search The file path to search
 	 * @return If the file exist
 	 */
 	public boolean existInDeleteList(String search) {
-		for(String str: this.deleteList) {
-		    if(str.trim().contains(search))
-		       return true;
+		if (isBlank(search)) return false;
+		for (String str : this.deleteList) {
+			if (str != null && str.trim().contains(search)) {
+				return true;
+			}
 		}
 		return false;
 	}
 
 	/**
 	 * Getting the ignore list from URL
+	 *
+	 * FIXES:
+	 * - si ignore.cfg absent (404) => ignore list vide (pas de crash)
+	 * - si URL null/malformée => return
+	 * - try-with-resources => pas de NPE sur read.close()
 	 */
-	@SuppressWarnings("deprecation")
 	public void getIgnoreList() {
-		URL url = null;
-		BufferedReader read = null;
+		if (this.engine == null || this.engine.getGameLinks() == null) return;
+
+		String ignoreUrl = this.engine.getGameLinks().getIgnoreListUrl();
+		if (isBlank(ignoreUrl)) {
+			// ignore list désactivée
+			return;
+		}
+
+		final URL url;
 		try {
-			url = new URL(this.engine.getGameLinks().getIgnoreListUrl());
+			url = new URL(ignoreUrl);
 		} catch (MalformedURLException e) {
 			e.printStackTrace();
+			return;
 		}
-		try {
-			read = new BufferedReader(new InputStreamReader(url.openStream()));
-		} catch (IOException e1) {
-			e1.printStackTrace();
-		}
-		String i;
-		try {
+
+		try (BufferedReader read = new BufferedReader(new InputStreamReader(url.openStream(), StandardCharsets.UTF_8))) {
+			String i;
 			while ((i = read.readLine()) != null) {
-				String correctName = i.replace('/', File.separatorChar);
-				if (correctName.endsWith("\\") || correctName.endsWith("/")) {
-//					Logger.log(correctName + " is a folder.");
+				i = i.trim();
+				if (i.isEmpty() || i.startsWith("#")) continue;
+
+				String correctName = normalizeSeparators(i);
+
+				boolean isFolder = correctName.endsWith("/") || correctName.endsWith("\\") || correctName.endsWith(String.valueOf(File.separatorChar));
+				if (isFolder) {
+					// on stocke la forme “dossier” avec séparateur final pour matcher plus facilement
+					correctName = normalizeSeparators(correctName);
+					if (!correctName.endsWith(File.separator)) {
+						correctName = correctName + File.separator;
+					}
 					this.ignoreListFolder.add(correctName);
-				}
-				else {
+				} else {
 					this.ignoreList.add("" + this.engine.getGameFolder().getGameDir() + File.separatorChar + correctName);
 				}
 			}
+		} catch (FileNotFoundException e) {
+			// 404 ignore.cfg => OK (ex: Mojang), on continue sans ignore list
 		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		try {
-			read.close();
-		} catch (IOException e) {
+			// réseau / autre IO => pas bloquant, on continue sans ignore list
 			e.printStackTrace();
 		}
 	}
 
 	/**
 	 * Getting the delete list from URL
+	 *
+	 * FIXES:
+	 * - si delete.cfg absent (404) => delete list vide (pas de crash)
+	 * - si URL null/malformée => return
 	 */
-	@SuppressWarnings("deprecation")
 	public void getDeleteList() {
-		URL url = null;
-		BufferedReader read = null;
+		if (this.engine == null || this.engine.getGameLinks() == null) return;
+
+		String deleteUrl = this.engine.getGameLinks().getDeleteListUrl();
+		if (isBlank(deleteUrl)) {
+			// delete list désactivée
+			return;
+		}
+
+		final URL url;
 		try {
-			url = new URL(this.engine.getGameLinks().getDeleteListUrl());
+			url = new URL(deleteUrl);
 		} catch (MalformedURLException e) {
 			e.printStackTrace();
+			return;
 		}
-		try {
-			read = new BufferedReader(new InputStreamReader(url.openStream()));
-		} catch (IOException e1) {
-			e1.printStackTrace();
-		}
-		String i;
-		try {
+
+		try (BufferedReader read = new BufferedReader(new InputStreamReader(url.openStream(), StandardCharsets.UTF_8))) {
+			String i;
 			while ((i = read.readLine()) != null) {
-				String correctName = i.replace('/', File.separatorChar);
+				i = i.trim();
+				if (i.isEmpty() || i.startsWith("#")) continue;
+
+				String correctName = normalizeSeparators(i);
 				this.deleteList.add("" + this.engine.getGameFolder().getGameDir() + File.separatorChar + correctName);
 			}
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		try {
-			read.close();
+		} catch (FileNotFoundException e) {
+			// 404 delete.cfg => OK
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 	}
-	
-	
 }

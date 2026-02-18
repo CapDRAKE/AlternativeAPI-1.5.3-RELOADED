@@ -69,7 +69,8 @@ public class LauncherConfig {
 			configDetails.put(EnumConfig.PASSWORD.getOption(), EnumConfig.PASSWORD.getDefault());
 			configDetails.put(EnumConfig.DATE.getOption(), EnumConfig.DATE.getDefault());
 			configDetails.put(EnumConfig.LANGUAGE.getOption(), EnumConfig.LANGUAGE.getDefault());
-
+			configDetails.put(EnumConfig.CFG_INCLUDE_SNAPSHOTS.getOption(), EnumConfig.CFG_INCLUDE_SNAPSHOTS.getDefault());
+			
 			try {
 				FileWriter fw = new FileWriter(this.launcherConfig);
 				JsonUtil.getGson().toJson(configDetails, fw);
