@@ -57,7 +57,6 @@ public class GameVerifier {
 	/**
 	 * Verify files to ignore/delete
 	 */
-	@SuppressWarnings("unchecked")
 	public void verify() {
 		if (this.engine == null || this.engine.getGameFolder() == null || this.engine.getGameFolder().getBinDir() == null) {
 			return;
@@ -71,8 +70,20 @@ public class GameVerifier {
 
 		final String gameDirAbs = this.engine.getGameFolder().getGameDir().getAbsolutePath();
 		final String jsonName = (this.engine.getGameLinks() != null) ? this.engine.getGameLinks().getJsonName() : null;
+		final String currentJavaHome = new File(System.getProperty("java.home")).getAbsolutePath();
 
 		for (File file : this.filesList) {
+
+			if (file.getAbsolutePath().startsWith(currentJavaHome + File.separator)) {
+				continue;
+			}
+
+			String relativePath = file.getAbsolutePath().replace(gameDirAbs, "");
+
+			// Protège les données utilisateur du dossier de jeu (options, serveurs, saves, etc.)
+			if (isProtectedUserData(relativePath)) {
+				continue;
+			}
 
 			// ne touche pas au json
 			if (jsonName != null && file.getAbsolutePath().endsWith(jsonName)) {
@@ -96,8 +107,6 @@ public class GameVerifier {
 				continue;
 			}
 
-			String relativePath = file.getAbsolutePath().replace(gameDirAbs, "");
-
 			// delete forcé
 			if (existInDeleteList(relativePath)) {
 				FileUtil.deleteSomething(file.getAbsolutePath());
@@ -120,7 +129,41 @@ public class GameVerifier {
 		}
 	}
 
-	/**
+	private boolean isProtectedUserData(String relativePath) {
+		if (isBlank(relativePath)) return false;
+
+		String path = normalizeSeparators(relativePath);
+		String playPrefix = File.separator + "bin" + File.separator + "game" + File.separator;
+
+		if (!path.startsWith(playPrefix)) {
+			return false;
+		}
+
+		String insideGame = path.substring(playPrefix.length());
+		String lower = insideGame.toLowerCase();
+
+		if (lower.equals("servers.dat") || lower.equals("servers.dat_old")
+				|| lower.equals("options.txt") || lower.equals("optionsof.txt")
+				|| lower.equals("optionsshaders.txt") || lower.equals("optionsfullscreen.txt")
+				|| lower.equals("optionsoculus.txt") || lower.equals("usercache.json")
+				|| lower.equals("usernamecache.json") || lower.equals("lastlogin")) {
+			return true;
+		}
+
+		if (lower.startsWith("options") && lower.endsWith(".txt")) {
+			return true;
+		}
+
+		return lower.startsWith("saves" + File.separator)
+				|| lower.startsWith("screenshots" + File.separator)
+				|| lower.startsWith("logs" + File.separator)
+				|| lower.startsWith("crash-reports" + File.separator)
+				|| lower.startsWith("resourcepacks" + File.separator)
+				|| lower.startsWith("shaderpacks" + File.separator)
+				|| lower.startsWith("server-resource-packs" + File.separator);
+	}
+
+/**
 	 * Add files to allowed files list
 	 * @param allowed The file to add
 	 */

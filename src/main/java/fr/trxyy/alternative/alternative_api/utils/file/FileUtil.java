@@ -267,6 +267,9 @@ public class FileUtil {
 	 * @param a The Closeable
 	 */
 	private static void close(Closeable a) {
+		if (a == null) {
+			return;
+		}
 		try {
 			a.close();
 		} catch (Exception var2) {
@@ -285,7 +288,8 @@ public class FileUtil {
 	 */
 	public static boolean matchSHA1(final File file, final String sha1) {
 		try {
-			return getSHA(file).equals(sha1);
+			String currentSha = getSHA(file);
+			return currentSha != null && currentSha.equalsIgnoreCase(sha1);
 		} catch (Exception e) {
 			e.printStackTrace();
 			return false;

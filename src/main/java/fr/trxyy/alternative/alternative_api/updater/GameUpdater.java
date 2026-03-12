@@ -111,7 +111,10 @@ public class GameUpdater extends Thread {
     public int filesToDownload = 0;
     private boolean isOnline = true;
 
-    public final Map<String,String> jars = new HashMap<>();
+        public final Map<String, String> jars = Collections.synchronizedMap(new LinkedHashMap<String, String>());
+    private final List<String> failedDownloads = Collections.synchronizedList(new ArrayList<String>());
+    private volatile boolean hasDownloadError = false;
+    private volatile File clientJarFile = null;
 
     /**
      * Register some things...
@@ -131,12 +134,83 @@ public class GameUpdater extends Thread {
         this.session = account;
     }
 
+
+    public void registerDownloadFailure(File file, String url, Exception e) {
+        this.hasDownloadError = true;
+        this.failedDownloads.add(file.getAbsolutePath() + " <- " + url + " (" + e.getClass().getSimpleName() + ": " + e.getMessage() + ")");
+    }
+
+    public boolean hasDownloadError() {
+        return this.hasDownloadError;
+    }
+
+    public List<String> getFailedDownloads() {
+        return new ArrayList<String>(this.failedDownloads);
+    }
+
+    public File getClientJarFile() {
+        if (this.clientJarFile != null) {
+            return this.clientJarFile;
+        }
+        return this.engine.getGameFolder().getGameJar();
+    }
+
+    private String resolveVersionId() {
+        if (minecraftVersion != null && minecraftVersion.getId() != null && !minecraftVersion.getId().trim().isEmpty()) {
+            return minecraftVersion.getId();
+        }
+        if (this.engine != null && this.engine.getGameLinks() != null && this.engine.getGameLinks().getJsonName() != null) {
+            String jsonName = this.engine.getGameLinks().getJsonName();
+            if (jsonName.endsWith(".json")) {
+                return jsonName.substring(0, jsonName.length() - 5);
+            }
+            return jsonName;
+        }
+        return "minecraft";
+    }
+
+    private File resolveClientJarTarget() {
+        if (this.hasCustomJar) {
+            return new File(this.engine.getGameFolder().getBinDir(), "minecraft.jar");
+        }
+
+        String versionId = resolveVersionId();
+        File versionsDir = new File(this.engine.getGameFolder().getBinDir(), "versions");
+        File versionDir = new File(versionsDir, versionId);
+        versionDir.mkdirs();
+        return new File(versionDir, versionId + ".jar");
+    }
+
+    private void resetState() {
+        this.files.clear();
+        this.downloadedFiles = 0;
+        this.filesToDownload = 0;
+        this.currentFile = "";
+        this.currentInfoText = "";
+        this.hasCustomJar = false;
+        this.hasDownloadError = false;
+        this.failedDownloads.clear();
+        this.jars.clear();
+        GameVerifier.allowedFiles.clear();
+        initExecutors();
+    }
+
+    private void initExecutors() {
+        this.assetsExecutor = Executors.newFixedThreadPool(5);
+        this.customJarsExecutor = Executors.newFixedThreadPool(5);
+        this.jarsExecutor = Executors.newFixedThreadPool(5);
+        this.javaExecutor = Executors.newFixedThreadPool(5);
+        this.log4jExecutor = Executors.newFixedThreadPool(5);
+    }
+
+
     /**
      * Run the update (Thread)
      */
     @Override
     public void run() {
         /** -------------------------------------- */
+        this.resetState();
         this.HOST = engine.getGameLinks().getBaseUrl();
         this.isOnline = this.isOnline();
         this.engine.setOnline(this.isOnline);
@@ -254,6 +328,15 @@ public class GameUpdater extends Thread {
 
             this.setCurrentInfoText("Telechargement accompli.");
 
+            if (this.hasDownloadError()) {
+                Logger.err("Launch cancelled: some downloads failed.");
+                for (String failedDownload : this.getFailedDownloads()) {
+                    Logger.err(failedDownload);
+                }
+                this.setCurrentInfoText("Echec de telechargement de certaines librairies.");
+                return;
+            }
+
             GameRunner gameRunner = new GameRunner(this.engine, this.session);
             try {
                 gameRunner.launch();
@@ -309,6 +392,15 @@ public class GameUpdater extends Thread {
             Logger.log("==============GAME OUTPUT===============");
 
             this.setCurrentInfoText("Telechargement accompli.");
+
+            if (this.hasDownloadError()) {
+                Logger.err("Offline launch cancelled: some downloads failed.");
+                for (String failedDownload : this.getFailedDownloads()) {
+                    Logger.err(failedDownload);
+                }
+                this.setCurrentInfoText("Echec de telechargement de certaines librairies.");
+                return;
+            }
 
             GameRunner gameRunner = new GameRunner(this.engine, this.session);
             try {
@@ -371,7 +463,6 @@ public class GameUpdater extends Thread {
     /**
      * Download Minecraft Json version at Every Launch to be up to date.
      */
-    @SuppressWarnings("deprecation")
 	public void downloadVersion() {
         File theFile = new File(engine.getGameFolder().getCacheDir(), engine.getGameLinks().getJsonName());
         GameVerifier.addToFileList(theFile.getAbsolutePath().replace(engine.getGameFolder().getCacheDir().getAbsolutePath(), "").replace('/', File.separatorChar));
@@ -430,82 +521,50 @@ public class GameUpdater extends Thread {
     /**
      * Update minecraft libraries
      */
-    @SuppressWarnings({ "unlikely-arg-type", "unused" })
     public void updateJars() {
         for (MinecraftLibrary lib : minecraftVersion.getLibraries()) {
-            File libPath = new File(engine.getGameFolder().getLibsDir(), lib.getArtifactPath());
+            File libPath = resolveLibraryTargetFile(lib);
 
             GameVerifier.addToFileList(
                     libPath.getAbsolutePath().replace(engine.getGameFolder().getGameDir().getAbsolutePath(), "")
                             .replace('/', File.separatorChar));
 
-            if (lib.getCompatibilityRules() != null) {
-                for (final CompatibilityRule rule : lib.getCompatibilityRules()) {
-                    if (rule.getOs() != null && rule.getAction() != null) {
-                        for (final String os : rule.getOs().getName().getAliases()) {
-                            if (lib.appliesToCurrentEnvironment()) {
-                                if (rule.getAction().equals("disallow")) {
-                                    lib.setSkipped(true);
-                                } else {
-                                    lib.setSkipped(false);
-                                }
-                            } else {
-                                if (rule.getAction().equals("allow")) {
-                                    lib.setSkipped(false);
-                                } else {
-                                    lib.setSkipped(true);
-                                }
-                            }
-                        }
+            applyCompatibilityRules(lib);
+
+            if (lib.isSkipped() || !matchesDeclaredNativeEnvironment(lib)) {
+                continue;
+            }
+
+            if (!isNativeCoordinateLibrary(lib)) {
+                jars.put(lib.getName(), libPath.getAbsolutePath());
+            }
+
+            if (lib.getDownloads() != null && lib.getDownloads().getArtifact() != null
+                    && lib.getDownloads().getArtifact().getUrl() != null) {
+                final Downloader downloadTask = new Downloader(libPath,
+                        lib.getDownloads().getArtifact().getUrl().toString(),
+                        lib.getDownloads().getArtifact().getSha1(), engine);
+                if (downloadTask.requireUpdate()) {
+                    if (!verifier.existInDeleteList(libPath.getAbsolutePath()
+                            .replace(engine.getGameFolder().getGameDir().getAbsolutePath(), ""))) {
+                        this.filesToDownload++;
+                        this.jarsExecutor.submit(downloadTask);
                     }
                 }
             }
 
-            if (!lib.isSkipped()) {
-                jars.put(simplifyName(lib.getName()),libPath.getAbsolutePath());
-                if (lib.getDownloads().getArtifact() != null) {
-                    final Downloader downloadTask = new Downloader(libPath,
-                            lib.getDownloads().getArtifact().getUrl().toString(),
-                            lib.getDownloads().getArtifact().getSha1(), engine);
-                    if (downloadTask.requireUpdate()) {
-                        if (!verifier.existInDeleteList(libPath.getAbsolutePath()
-                                .replace(engine.getGameFolder().getGameDir().getAbsolutePath(), ""))) {
-                            this.filesToDownload++;
-                            this.jarsExecutor.submit(downloadTask);
-                        } else {
-                        }
-                    }
-                }
-
-                if (lib.hasNatives()) {
-                    for (final String osName : lib.getNatives().values()) {
-                        String realOsName = osName.replace("${arch}", Arch.CURRENT.getBit());
-                        if (lib.getDownloads().getClassifiers().get(realOsName) != null) {
-                            final File nativePath = new File(engine.getGameFolder().getNativesCacheDir(),
-                                    lib.getArtifactNatives(realOsName));
-                            GameVerifier.addToFileList(nativePath.getAbsolutePath()
-                                    .replace(engine.getGameFolder().getGameDir().getAbsolutePath(), "")
-                                    .replace('/', File.separatorChar));
-                            final Downloader downloadTask8 = new Downloader(nativePath,
-                                    lib.getDownloads().getClassifiers().get(realOsName).getUrl().toString(),
-                                    lib.getDownloads().getClassifiers().get(realOsName).getSha1(), engine);
-                            if (downloadTask8.requireUpdate()) {
-                                if (!verifier.existInDeleteList(nativePath.getAbsolutePath()
-                                        .replace(engine.getGameFolder().getGameDir().getAbsolutePath(), ""))) {
-                                    this.filesToDownload++;
-                                    this.jarsExecutor.submit(downloadTask8);
-                                } else {
-                                }
-                            }
-                        }
-                    }
-                }
+            if (!isNativeCoordinateLibrary(lib)) {
+                queueNativeDownload(lib);
             }
         }
-        final Downloader downloadTask3 = new Downloader(new File(engine.getGameFolder().getBinDir(), "minecraft.jar"),
+
+        File clientJarTarget = resolveClientJarTarget();
+        this.clientJarFile = clientJarTarget;
+
+        final Downloader downloadTask3 = new Downloader(clientJarTarget,
                 minecraftVersion.getDownloads().getClient().getUrl().toString(),
                 minecraftVersion.getDownloads().getClient().getSha1(), engine);
-        GameVerifier.addToFileList(new File(engine.getGameFolder().getBinDir(), "minecraft.jar").getAbsolutePath()
+        GameVerifier.addToFileList(clientJarTarget.getAbsolutePath()
                 .replace(engine.getGameFolder().getGameDir().getAbsolutePath(), "").replace('/', File.separatorChar));
 
         if (downloadTask3.requireUpdate()) {
@@ -513,10 +572,8 @@ public class GameUpdater extends Thread {
                 this.jarsExecutor.submit(downloadTask3);
                 this.filesToDownload++;
             }
-            /**
-             * On annule le telechargement du client si on doit telecharger un client custom
-             */
         }
+
         this.jarsExecutor.shutdown();
 
         try {
@@ -526,61 +583,206 @@ public class GameUpdater extends Thread {
         }
     }
 
-    private String simplifyName(String name) {
-        return name.split(":")[1];
-    }
-
-    @SuppressWarnings("unused")
-	private void update1_19_HighersLibraries() {
-        for (MinecraftLibrary lib : minecraftVersion.getLibraries()) {
-            File libPath = new File(engine.getGameFolder().getLibsDir(), lib.getDownloads().getArtifact().getPath());
-            GameVerifier.addToFileList(
-                    libPath.getAbsolutePath().replace(engine.getGameFolder().getGameDir().getAbsolutePath(), "")
-                            .replace('/', File.separatorChar));
-
-            if (lib.getCompatibilityRules() != null) {
-                for (final CompatibilityRule rule : lib.getCompatibilityRules()) {
-                    if (rule.getOs() != null && rule.getAction() != null) {
-                        for (final String os : rule.getOs().getName().getAliases()) {
-                            if (lib.appliesToCurrentEnvironment()) {
-                                if (rule.getAction().equals("disallow")) {
-                                    lib.setSkipped(true);
-                                } else {
-                                    lib.setSkipped(false);
-                                }
+    private void applyCompatibilityRules(MinecraftLibrary lib) {
+        if (lib.getCompatibilityRules() != null) {
+            for (final CompatibilityRule rule : lib.getCompatibilityRules()) {
+                if (rule.getOs() != null && rule.getAction() != null) {
+                    for (final String os : rule.getOs().getName().getAliases()) {
+                        if (lib.appliesToCurrentEnvironment()) {
+                            if (rule.getAction().equals("disallow")) {
+                                lib.setSkipped(true);
                             } else {
-                                if (rule.getAction().equals("allow")) {
-                                    lib.setSkipped(false);
-                                } else {
-                                    lib.setSkipped(true);
-                                }
+                                lib.setSkipped(false);
+                            }
+                        } else {
+                            if (rule.getAction().equals("allow")) {
+                                lib.setSkipped(false);
+                            } else {
+                                lib.setSkipped(true);
                             }
                         }
                     }
                 }
             }
+        }
+    }
 
-            if (!lib.isSkipped()) {
-                jars.put(lib.getName(),libPath.getAbsolutePath());
-                if (lib.getDownloads().getArtifact() != null) {
-                    final Downloader downloadTask = new Downloader(libPath,
-                            lib.getDownloads().getArtifact().getUrl().toString(),
-                            lib.getDownloads().getArtifact().getSha1(), engine);
-                    if (downloadTask.requireUpdate()) {
-                        if (!verifier.existInDeleteList(libPath.getAbsolutePath()
-                                .replace(engine.getGameFolder().getGameDir().getAbsolutePath(), ""))) {
-                            this.filesToDownload++;
-                            this.jarsExecutor.submit(downloadTask);
-                        } else {
-                        }
+    private boolean isNativeCoordinateLibrary(MinecraftLibrary lib) {
+        return lib != null && lib.isDeclaredNativeLibrary();
+    }
+
+    private boolean matchesDeclaredNativeEnvironment(MinecraftLibrary lib) {
+        return lib == null || lib.declaredNativeMatchesCurrentEnvironment();
+    }
+
+    private File resolveLibraryTargetFile(MinecraftLibrary lib) {
+        if (isNativeCoordinateLibrary(lib)) {
+            String nativeFileName = null;
+            if (lib.getDownloads() != null && lib.getDownloads().getArtifact() != null
+                    && lib.getDownloads().getArtifact().getPath() != null
+                    && !lib.getDownloads().getArtifact().getPath().trim().isEmpty()) {
+                nativeFileName = new File(lib.getDownloads().getArtifact().getPath()).getName();
+            }
+            if (nativeFileName == null || nativeFileName.trim().isEmpty()) {
+                nativeFileName = lib.getArtifactFilename(null);
+            }
+            return new File(engine.getGameFolder().getNativesCacheDir(), nativeFileName);
+        }
+
+        if (lib.getDownloads() != null && lib.getDownloads().getArtifact() != null
+                && lib.getDownloads().getArtifact().getPath() != null
+                && !lib.getDownloads().getArtifact().getPath().trim().isEmpty()) {
+            return new File(engine.getGameFolder().getLibsDir(), lib.getDownloads().getArtifact().getPath());
+        }
+
+        return new File(engine.getGameFolder().getLibsDir(), lib.getArtifactPath());
+    }
+
+    private void queueNativeDownload(MinecraftLibrary lib) {
+        String classifierKey = resolveNativeClassifier(lib);
+        if (classifierKey == null || lib.getDownloads() == null || lib.getDownloads().getClassifiers() == null) {
+            return;
+        }
+
+        DownloadInfo nativeInfo = lib.getDownloads().getClassifiers().get(classifierKey);
+        if (nativeInfo == null || nativeInfo.getUrl() == null) {
+            return;
+        }
+
+        String nativeFileName = null;
+        if (nativeInfo.getPath() != null && !nativeInfo.getPath().trim().isEmpty()) {
+            nativeFileName = new File(nativeInfo.getPath()).getName();
+        }
+        if (nativeFileName == null || nativeFileName.trim().isEmpty()) {
+            nativeFileName = lib.getArtifactNatives(classifierKey);
+        }
+
+        final File nativePath = new File(engine.getGameFolder().getNativesCacheDir(), nativeFileName);
+        GameVerifier.addToFileList(nativePath.getAbsolutePath()
+                .replace(engine.getGameFolder().getGameDir().getAbsolutePath(), "")
+                .replace('/', File.separatorChar));
+
+        final Downloader downloadTask = new Downloader(nativePath,
+                nativeInfo.getUrl().toString(),
+                nativeInfo.getSha1(),
+                engine);
+
+        if (downloadTask.requireUpdate()) {
+            if (!verifier.existInDeleteList(nativePath.getAbsolutePath()
+                    .replace(engine.getGameFolder().getGameDir().getAbsolutePath(), ""))) {
+                this.filesToDownload++;
+                this.jarsExecutor.submit(downloadTask);
+            }
+        }
+    }
+
+    private String resolveNativeClassifier(MinecraftLibrary lib) {
+        if (lib == null || !lib.hasNatives() || lib.getDownloads() == null || lib.getDownloads().getClassifiers() == null) {
+            return null;
+        }
+
+        Map<String, DownloadInfo> classifiers = lib.getDownloads().getClassifiers();
+        if (classifiers.isEmpty()) {
+            return null;
+        }
+
+        String classifier = null;
+        if (lib.getNatives() != null) {
+            classifier = lib.getNatives().get(OperatingSystem.getCurrent());
+        }
+
+        if (classifier != null) {
+            classifier = classifier.replace("${arch}", Arch.CURRENT.getBit());
+            if (classifiers.containsKey(classifier)) {
+                return classifier;
+            }
+        }
+
+        List<String> candidates = new ArrayList<>();
+        OperatingSystem currentOs = OperatingSystem.getCurrent();
+        if (currentOs == OperatingSystem.WINDOWS) {
+            if (Arch.CURRENT == Arch.x86) {
+                candidates.add("natives-windows-x86");
+                candidates.add("natives-windows");
+            } else {
+                candidates.add("natives-windows");
+                candidates.add("natives-windows-x86");
+            }
+            candidates.add("natives-windows-arm64");
+        } else if (currentOs == OperatingSystem.LINUX) {
+            candidates.add("natives-linux");
+        } else if (currentOs == OperatingSystem.OSX) {
+            candidates.add("natives-macos");
+            candidates.add("natives-osx");
+            candidates.add("natives-osx-arm64");
+        }
+
+        for (String candidate : candidates) {
+            if (classifiers.containsKey(candidate)) {
+                return candidate;
+            }
+        }
+
+        for (String key : classifiers.keySet()) {
+            String lower = key.toLowerCase(Locale.ROOT);
+            if (currentOs == OperatingSystem.WINDOWS && lower.contains("windows") && !lower.contains("arm64")) {
+                return key;
+            }
+            if (currentOs == OperatingSystem.LINUX && lower.contains("linux")) {
+                return key;
+            }
+            if (currentOs == OperatingSystem.OSX && (lower.contains("mac") || lower.contains("osx"))) {
+                return key;
+            }
+        }
+
+        return null;
+    }
+
+
+    @SuppressWarnings("unused")
+    private void update1_19_HighersLibraries() {
+        for (MinecraftLibrary lib : minecraftVersion.getLibraries()) {
+            File libPath = resolveLibraryTargetFile(lib);
+            GameVerifier.addToFileList(
+                    libPath.getAbsolutePath().replace(engine.getGameFolder().getGameDir().getAbsolutePath(), "")
+                            .replace('/', File.separatorChar));
+
+            applyCompatibilityRules(lib);
+
+            if (lib.isSkipped() || !matchesDeclaredNativeEnvironment(lib)) {
+                continue;
+            }
+
+            if (!isNativeCoordinateLibrary(lib)) {
+                jars.put(lib.getName(), libPath.getAbsolutePath());
+            }
+
+            if (lib.getDownloads() != null && lib.getDownloads().getArtifact() != null
+                    && lib.getDownloads().getArtifact().getUrl() != null) {
+                final Downloader downloadTask = new Downloader(libPath,
+                        lib.getDownloads().getArtifact().getUrl().toString(),
+                        lib.getDownloads().getArtifact().getSha1(), engine);
+                if (downloadTask.requireUpdate()) {
+                    if (!verifier.existInDeleteList(libPath.getAbsolutePath()
+                            .replace(engine.getGameFolder().getGameDir().getAbsolutePath(), ""))) {
+                        this.filesToDownload++;
+                        this.jarsExecutor.submit(downloadTask);
                     }
                 }
             }
+
+            if (!isNativeCoordinateLibrary(lib)) {
+                queueNativeDownload(lib);
+            }
         }
-        final Downloader downloadTask3 = new Downloader(new File(engine.getGameFolder().getBinDir(), "minecraft.jar"),
+        File clientJarTarget = resolveClientJarTarget();
+        this.clientJarFile = clientJarTarget;
+
+        final Downloader downloadTask3 = new Downloader(clientJarTarget,
                 minecraftVersion.getDownloads().getClient().getUrl().toString(),
                 minecraftVersion.getDownloads().getClient().getSha1(), engine);
-        GameVerifier.addToFileList(new File(engine.getGameFolder().getBinDir(), "minecraft.jar").getAbsolutePath()
+        GameVerifier.addToFileList(clientJarTarget.getAbsolutePath()
                 .replace(engine.getGameFolder().getGameDir().getAbsolutePath(), "").replace('/', File.separatorChar));
 
         if (downloadTask3.requireUpdate()) {
@@ -588,9 +790,6 @@ public class GameUpdater extends Thread {
                 this.jarsExecutor.submit(downloadTask3);
                 this.filesToDownload++;
             }
-            /**
-             * On annule le telechargement du client si on doit telecharger un client custom
-             */
         }
         this.jarsExecutor.shutdown();
 
@@ -612,7 +811,7 @@ public class GameUpdater extends Thread {
             GameVerifier.addToFileList(
                     libPath.getAbsolutePath().replace(engine.getGameFolder().getGameDir().getAbsolutePath(), "")
                             .replace('/', File.separatorChar));
-            jars.put(simplifyName(lib.getName()),libPath.getAbsolutePath());
+            jars.put(lib.getName(), libPath.getAbsolutePath());
             if (lib.getDownloads().getArtifact() != null) {
                 if (lib.getDownloads().getArtifact().getUrl() == null || lib.getDownloads().getArtifact().getUrl().isEmpty()) {
                     continue;
@@ -852,20 +1051,18 @@ public class GameUpdater extends Thread {
      * Update custom jars
      */
     private void updateCustomJars() {
-        for (String name : this.files.keySet()) {
+        for (Map.Entry<String, LauncherFile> entry : this.files.entrySet()) {
+            LauncherFile launcherFile = entry.getValue();
+            File libPath = new File(launcherFile.getPath());
+            String url = launcherFile.getUrl();
 
-            String fileDest = name.replace(engine.getGameLinks().getCustomFilesUrl(), "");
-            String fileName = fileDest;
-            int index = fileName.lastIndexOf("\\");
-            String dirLocation = fileName.substring(index + 1);
+            final Downloader customDownloadTask = new Downloader(libPath, url, null, engine);
 
-            File libPath = new File(engine.getGameFolder().getGameDir() + File.separator + dirLocation);
-            String url = engine.getGameLinks().getCustomFilesUrl() + name;
-            final Downloader customDownloadTask = new Downloader(libPath, url, null, engine); // GameParser
             if (!verifier.existInDeleteList(
                     libPath.getAbsolutePath().replace(engine.getGameFolder().getGameDir().getAbsolutePath(), ""))) {
-                this.customJarsExecutor.submit(customDownloadTask);
-            } else {
+                if (customDownloadTask.requireUpdate()) {
+                    this.customJarsExecutor.submit(customDownloadTask);
+                }
             }
         }
     }
@@ -950,7 +1147,6 @@ public class GameUpdater extends Thread {
     /**
      * @return If the host is reachable
      */
-    @SuppressWarnings("deprecation")
 	public boolean isOnline() {
         try {
             URL url = new URL(HOST);

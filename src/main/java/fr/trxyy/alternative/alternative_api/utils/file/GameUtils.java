@@ -62,18 +62,18 @@ public class GameUtils {
      * @return A String that contains the classpath
      */
     public static String constructClasspath(GameEngine engine) {
-        StringBuilder result = new StringBuilder();
-        String separator = System.getProperty("path.separator");
+        LinkedHashSet<String> classpathEntries = new LinkedHashSet<String>();
+
         for (String lib : engine.getGameUpdater().getJars()) {
-            if (lib.endsWith(".jar") || lib.endsWith(".zip")) {
-                if (!result.toString().contains(lib)) {
-                    Logger.log("Adding " + lib);
-                    result.append(lib).append(separator);
-                }
+            if (lib != null && (lib.endsWith(".jar") || lib.endsWith(".zip"))) {
+                Logger.log("Adding " + lib);
+                classpathEntries.add(lib);
             }
         }
-        result.append(engine.getGameFolder().getGameJar().getAbsolutePath());
-        return result.toString();
+
+        File clientJar = engine.getGameUpdater().getClientJarFile();
+        classpathEntries.add(clientJar.getAbsolutePath());
+        return String.join(File.pathSeparator, classpathEntries);
     }
 
     /**

@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import fr.trxyy.alternative.alternative_api.minecraft.utils.Arch;
 import fr.trxyy.alternative.alternative_api.minecraft.utils.CompatibilityRule;
 import fr.trxyy.alternative.alternative_api.minecraft.utils.Substitutor;
 import fr.trxyy.alternative.alternative_api.utils.OperatingSystem;
@@ -114,7 +115,7 @@ public class MinecraftLibrary {
 
     private String[] parts() {
         if (this.name == null) throw new IllegalStateException("Library name is null");
-        return this.name.split(":"); // NO LIMIT
+        return this.name.split(":");
     }
 
     private String groupId() {
@@ -129,10 +130,60 @@ public class MinecraftLibrary {
         return p[1];
     }
 
-    private String version() {
+    private String rawVersionToken() {
         String[] p = parts();
         if (p.length < 3) throw new IllegalStateException("Bad maven coords: " + this.name);
-        return p[2]; // ALWAYS the 3rd segment
+        return p[2];
+    }
+
+    private String rawClassifierToken() {
+        String[] p = parts();
+        if (p.length >= 4) {
+            return p[3];
+        }
+        return null;
+    }
+
+    private String stripExtension(String token) {
+        if (token == null) return null;
+        int at = token.indexOf('@');
+        if (at >= 0) {
+            return token.substring(0, at);
+        }
+        return token;
+    }
+
+    private String extractExtension(String token) {
+        if (token == null) return null;
+        int at = token.indexOf('@');
+        if (at >= 0 && at + 1 < token.length()) {
+            return token.substring(at + 1);
+        }
+        return null;
+    }
+
+    private String version() {
+        return stripExtension(rawVersionToken());
+    }
+
+    public String getDeclaredClassifier() {
+        return stripExtension(rawClassifierToken());
+    }
+
+    public boolean hasDeclaredClassifier() {
+        String classifier = getDeclaredClassifier();
+        return classifier != null && !classifier.trim().isEmpty();
+    }
+
+    public String getDeclaredExtension() {
+        String ext = extractExtension(rawClassifierToken());
+        if (ext == null || ext.trim().isEmpty()) {
+            ext = extractExtension(rawVersionToken());
+        }
+        if (ext == null || ext.trim().isEmpty()) {
+            ext = "jar";
+        }
+        return ext;
     }
 
     /**
@@ -147,19 +198,33 @@ public class MinecraftLibrary {
     }
 
     public String getArtifactPath() {
+        if (downloads != null && downloads.getArtifact() != null && downloads.getArtifact().getPath() != null
+                && !downloads.getArtifact().getPath().trim().isEmpty()) {
+            return downloads.getArtifact().getPath();
+        }
         return getArtifactPath(null);
     }
 
     public String getArtifactPath(String classifier) {
+        if (classifier == null && downloads != null && downloads.getArtifact() != null && downloads.getArtifact().getPath() != null
+                && !downloads.getArtifact().getPath().trim().isEmpty()) {
+            return downloads.getArtifact().getPath();
+        }
         return String.format("%s/%s", getArtifactBaseDir(), getArtifactFilename(classifier));
     }
 
     public String getArtifactFilename(String classifier) {
+        String effectiveClassifier = classifier;
+        if (effectiveClassifier == null || effectiveClassifier.trim().isEmpty()) {
+            effectiveClassifier = getDeclaredClassifier();
+        }
+
+        String ext = getDeclaredExtension();
         String result;
-        if (classifier == null) {
-            result = String.format("%s-%s.jar", artifactId(), version());
+        if (effectiveClassifier == null || effectiveClassifier.trim().isEmpty()) {
+            result = String.format("%s-%s.%s", artifactId(), version(), ext);
         } else {
-            result = String.format("%s-%s-%s.jar", artifactId(), version(), classifier);
+            result = String.format("%s-%s-%s.%s", artifactId(), version(), effectiveClassifier, ext);
         }
         return SUBSTITUTOR.replace(result);
     }
@@ -177,7 +242,6 @@ public class MinecraftLibrary {
      * @return native jar filename
      */
     public String getArtifactNatives(String nativeClassifierKey) {
-        // Si on a le path officiel dans downloads.classifiers, utilise le filename exact
         try {
             if (downloads != null && downloads.getClassifiers() != null
                     && downloads.getClassifiers().get(nativeClassifierKey) != null
@@ -188,8 +252,49 @@ public class MinecraftLibrary {
             }
         } catch (Exception ignored) {}
 
-        // Fallback safe : artifact-version-<classifier>.jar
         return artifactId() + "-" + version() + "-" + nativeClassifierKey + ".jar";
+    }
+
+    public boolean isDeclaredNativeLibrary() {
+        String classifier = getDeclaredClassifier();
+        return classifier != null && classifier.toLowerCase().contains("natives-");
+    }
+
+    public boolean declaredNativeMatchesCurrentEnvironment() {
+        if (!isDeclaredNativeLibrary()) {
+            return true;
+        }
+
+        String classifier = getDeclaredClassifier().toLowerCase();
+        OperatingSystem currentOs = OperatingSystem.getCurrent();
+
+        boolean osMatches = false;
+        if (currentOs == OperatingSystem.WINDOWS) {
+            osMatches = classifier.contains("windows");
+        } else if (currentOs == OperatingSystem.LINUX) {
+            osMatches = classifier.contains("linux");
+        } else if (currentOs == OperatingSystem.OSX) {
+            osMatches = classifier.contains("osx") || classifier.contains("mac");
+        }
+
+        if (!osMatches) {
+            return false;
+        }
+
+        if (classifier.contains("arm64") || classifier.contains("aarch64")) {
+            String osArch = System.getProperty("os.arch", "").toLowerCase();
+            return osArch.contains("arm") || osArch.contains("aarch64");
+        }
+
+        if (classifier.contains("x86")) {
+            return Arch.CURRENT == Arch.x86;
+        }
+
+        if (currentOs == OperatingSystem.WINDOWS && Arch.CURRENT == Arch.x86) {
+            return false;
+        }
+
+        return true;
     }
 
     public String getPlainName() {
