@@ -2,6 +2,7 @@ package fr.trxyy.alternative.alternative_api.build;
 
 import fr.trxyy.alternative.alternative_api.*;
 import fr.trxyy.alternative.alternative_api.minecraft.json.*;
+import fr.trxyy.alternative.alternative_api.minecraft.utils.EnumJavaVersion;
 import fr.trxyy.alternative.alternative_api.utils.*;
 import fr.trxyy.alternative.alternative_api.utils.file.*;
 import fr.trxyy.alternative.alternative_auth.account.*;
@@ -57,8 +58,7 @@ public class GameRunner {
 	 * Launch the game
 	 * @throws Exception
 	 */
-    public void launch() throws Exception
-    {
+    public void launch() throws Exception {
     	ArrayList<String> commands = this.getLaunchCommand();
         ProcessBuilder processBuilder = new ProcessBuilder(commands);
         processBuilder.redirectInput(Redirect.INHERIT);
@@ -107,45 +107,24 @@ public class GameRunner {
 	private ArrayList<String> getLaunchCommand() {
 		ArrayList<String> commands = new ArrayList<String>();
 		OperatingSystem os = OperatingSystem.getCurrentPlatform();
-        
-		
-		if (this.engine.isOnline()) {
-			if (this.engine.getMinecraftVersion().getJavaVersion() != null) {
-				String component = this.engine.getMinecraftVersion().getJavaVersion().getComponent();
-				if (component != null) {
-					commands.add(OperatingSystem.getJavaPath(this.engine));
-				}
-				else {
-					commands.add(OperatingSystem.getJavaPath());
-				}
-			} else {
-				commands.add(OperatingSystem.getJavaPath());
-			}
-		}
-		else {
-			if (this.engine.getGameUpdater().getLocalVersion().getJavaVersion() != null) {
-				String component = this.engine.getGameUpdater().getLocalVersion().getJavaVersion().getComponent();
-				if (component != null) {
-					commands.add(OperatingSystem.getJavaPath(this.engine));
-				} else {
-					commands.add(OperatingSystem.getJavaPath());
-				}
-			} else {
-				commands.add(OperatingSystem.getJavaPath());
-			}
-		}
-		
+		boolean modernForgeStyle = isModernForgeStyle();
+		boolean forgeWrapperStyle = isForgeWrapperStyle();
+		List<String> forgeJvmArguments = Collections.emptyList();
+
+		commands.add(resolveJavaBinaryForLaunch());
+
         commands.add("-XX:-UseAdaptiveSizePolicy");
-		
+
 		if (engine.getJVMArguments() != null) {
 			commands.addAll(engine.getJVMArguments().getJVMArguments());
 		}
 
-		if (engine.getGameStyle().equals(GameStyle.FORGE_1_17_HIGHER) || engine.getGameStyle().equals(GameStyle.FORGE_1_19_HIGHER)) {
-			commands.addAll(this.getForgeJVMArguments());
-			Logger.log(String.valueOf(this.getForgeJVMArguments()));
+		if (modernForgeStyle) {
+			forgeJvmArguments = this.getForgeJVMArguments();
+			commands.addAll(forgeJvmArguments);
+			Logger.log(String.valueOf(forgeJvmArguments));
 		}
-		commands.add("-Dbsl.debug=True"); // important to debug
+		commands.add("-Dbsl.debug=True");
 
 		if (os.equals(OperatingSystem.OSX)) {
 			commands.add("-Xdock:name=Minecraft");
@@ -156,7 +135,7 @@ public class GameRunner {
 			}
 			commands.add("-XX:HeapDumpPath=MojangTricksIntelDriversForPerformance_javaw.exe_minecraft.exe.heapdump");
 		}
-		
+
 		if (this.engine.isOnline()) {
 			if (this.engine.getMinecraftVersion().getJavaVersion() != null) {
 				commands.add("-XX:+UnlockExperimentalVMOptions");
@@ -166,8 +145,7 @@ public class GameRunner {
 				commands.add("-XX:MaxGCPauseMillis=50");
 				commands.add("-XX:G1HeapRegionSize=32M");
 			}
-		}
-		else {
+		} else {
 			if (this.engine.getGameUpdater().getLocalVersion().getJavaVersion() != null) {
 				commands.add("-XX:+UnlockExperimentalVMOptions");
 				commands.add("-XX:+UseG1GC");
@@ -177,16 +155,19 @@ public class GameRunner {
 				commands.add("-XX:G1HeapRegionSize=32M");
 			}
 		}
-		
-		if (this.engine.getMinecraftVersion().getLogging() != null) {
+
+		if (shouldInjectMinecraftLoggingConfiguration()) {
 			File log4jFile = new File(this.engine.getGameFolder().getLogConfigsDir(), this.engine.getMinecraftVersion().getLogging().getClient().getFile().getId());
 			commands.add(this.engine.getMinecraftVersion().getLogging().getClient().getArgument().replace("${path}", log4jFile.getAbsolutePath()));
 		}
-		if (!this.engine.getGameStyle().equals(GameStyle.VANILLA_1_19_HIGHER) || !this.engine.getGameStyle().equals(GameStyle.FORGE_1_19_HIGHER))
-			commands.add("-Djava.library.path=" + engine.getGameFolder().getNativesDir().getAbsolutePath());
+		String nativesPath = engine.getGameFolder().getNativesDir().getAbsolutePath();
+		commands.add("-Djava.library.path=" + nativesPath);
+		commands.add("-Dorg.lwjgl.librarypath=" + nativesPath);
 		commands.add("-Dfml.ignoreInvalidMinecraftCertificates=true");
 		commands.add("-Dfml.ignorePatchDiscrepancies=true");
-		
+		if (forgeWrapperStyle) {
+			addForgeWrapperProperties(commands);
+		}
 
 		boolean is32Bit = "32".equals(System.getProperty("sun.arch.data.model"));
 		String defaultArgument = is32Bit ? "-Xmx512M -Xmn128M" : "-Xmx1G -Xmn128M";
@@ -198,8 +179,19 @@ public class GameRunner {
 		commands.addAll(args);
 
 		commands.add("-cp");
-		commands.add(GameUtils.constructClasspath(engine));
-		commands.add(engine.getGameStyle().getMainClass());
+		String classpath = GameUtils.constructClasspath(engine);
+		if (modernForgeStyle) {
+			classpath = filterModulePathEntriesFromClasspath(classpath, forgeJvmArguments);
+			classpath = filterIncompatibleLibrariesFromModernForgeClasspath(classpath);
+		}
+		if (isLegacyBootstrapForgeStyle()) {
+			classpath = filterLegacyForgeVersionJarFromClasspath(classpath);
+		}
+		if (forgeWrapperStyle) {
+			classpath = filterForgeWrapperClasspath(classpath);
+		}
+		commands.add(classpath);
+		commands.add(resolveMainClass());
 
 		/** ----- Minecraft Arguments ----- */
 		if (engine.getMinecraftVersion().getMinecraftArguments() != null) {
@@ -214,7 +206,7 @@ public class GameRunner {
 
 			StringBuffer sb = new StringBuffer();
 			for (int i = 0; i < newerArgumentsString.length; i++) {
-				sb.append(newerArgumentsString[i] + " ");
+				sb.append(newerArgumentsString[i]).append(" ");
 			}
 			String sub = sb.toString().replace("--demo", "").replace("--width", "").replace("--height", "");
 			String strcs[] = sub.split(" ");
@@ -234,13 +226,13 @@ public class GameRunner {
 		}
 
 		/** ----- Change properties of Forge (1.13+) ----- */
-		if (!engine.getGameStyle().getSpecificsArguments().equals("")) {
+		if (!engine.getGameStyle().getSpecificsArguments().equals("") && !forgeWrapperStyle) {
 			commands.addAll(getForgeArguments());
 		}
 
 		/** ----- Direct connect to a server if required. ----- */
 		if (engine.getGameConnect() != null) {
-			System.out.println(engine.getGameConnect().getIp() + " " + engine.getGameConnect().getPort() );
+			System.out.println(engine.getGameConnect().getIp() + " " + engine.getGameConnect().getPort());
 			commands.add("--server");
 			commands.add(engine.getGameConnect().getIp());
 			commands.add("--port");
@@ -252,26 +244,508 @@ public class GameRunner {
 			commands.add("--tweakClass");
 			commands.add(engine.getGameStyle().getTweakArgument());
 		}
-	    /** ----- Filtrage des param�tres quickPlay* ----- */
+
+	    /** ----- Filtrage des paramètres quickPlay* ----- */
 	    commands.removeIf(arg -> arg.startsWith("--quickPlay"));
-	    
 	    /** ----- Suppression des arguments vides ----- */
 	    commands.removeIf(arg -> arg.trim().isEmpty());
 
-	    /** ----- Log complet de la commande de lancement ----- */
-	    Logger.log("Commande de lancement compl�te : " + String.join(" ", commands));
+	    Logger.log("Commande de lancement complète : " + String.join(" ", commands));
 	    return commands;
 	}
 
+	private boolean isModernForgeStyle() {
+		return engine.getGameStyle().equals(GameStyle.FORGE_1_13_HIGHER)
+				|| engine.getGameStyle().equals(GameStyle.FORGE_1_17_HIGHER)
+				|| engine.getGameStyle().equals(GameStyle.FORGE_1_19_HIGHER);
+	}
+
+	private String resolveMainClass() {
+		if (engine == null || engine.getGameStyle() == null) {
+			return GameStyle.VANILLA.getMainClass();
+		}
+		return ForgeLaunchResolver.resolveMainClass(engine);
+	}
+
+	private String resolveJavaBinaryForLaunch() {
+		String preferredComponent = resolvePreferredJavaComponentForLaunch();
+		if (preferredComponent != null && !preferredComponent.trim().isEmpty()) {
+			String runtimeBinary = findJavaBinaryInComponent(preferredComponent);
+			if (runtimeBinary != null && (!isModernForgeStyle() || isAcceptableModernForgeJava(runtimeBinary))) {
+				return runtimeBinary;
+			}
+		}
+
+		if (isModernForgeStyle()) {
+			String alphaBinary = findJavaBinaryInComponent(EnumJavaVersion.JAVA_RUNTIME_ALPHA.getCode());
+			if (alphaBinary != null && isAcceptableModernForgeJava(alphaBinary)) {
+				return alphaBinary;
+			}
+		}
+
+		if (this.engine.isOnline()) {
+			if (this.engine.getMinecraftVersion().getJavaVersion() != null) {
+				String component = this.engine.getMinecraftVersion().getJavaVersion().getComponent();
+				if (component != null) {
+					return OperatingSystem.getJavaPath(this.engine);
+				}
+			}
+		} else if (this.engine.getGameUpdater() != null && this.engine.getGameUpdater().getLocalVersion() != null
+				&& this.engine.getGameUpdater().getLocalVersion().getJavaVersion() != null) {
+			String component = this.engine.getGameUpdater().getLocalVersion().getJavaVersion().getComponent();
+			if (component != null) {
+				return OperatingSystem.getJavaPath(this.engine);
+			}
+		}
+
+		return OperatingSystem.getJavaPath();
+	}
+
+	private String resolvePreferredJavaComponentForLaunch() {
+		if (shouldUseAlphaRuntimeForLegacyBootstrapForge()) {
+			return EnumJavaVersion.JAVA_RUNTIME_ALPHA.getCode();
+		}
+
+		if (shouldUseLegacyRuntimeForForge113To116()) {
+			return EnumJavaVersion.JRE_LEGACY.getCode();
+		}
+
+		if (this.engine.isOnline()) {
+			if (this.engine.getMinecraftVersion() != null && this.engine.getMinecraftVersion().getJavaVersion() != null) {
+				return this.engine.getMinecraftVersion().getJavaVersion().getComponent();
+			}
+		} else if (this.engine.getGameUpdater() != null && this.engine.getGameUpdater().getLocalVersion() != null
+				&& this.engine.getGameUpdater().getLocalVersion().getJavaVersion() != null) {
+			return this.engine.getGameUpdater().getLocalVersion().getJavaVersion().getComponent();
+		}
+
+		return null;
+	}
+
+	private boolean shouldUseAlphaRuntimeForLegacyBootstrapForge() {
+		return engine != null
+				&& engine.getGameStyle() != null
+				&& engine.getGameStyle().equals(GameStyle.FORGE_1_13_HIGHER)
+				&& isLegacyBootstrapForgeStyle();
+	}
+
+	private boolean shouldUseLegacyRuntimeForForge113To116() {
+		return engine != null
+				&& engine.getGameStyle() != null
+				&& engine.getGameStyle().equals(GameStyle.FORGE_1_13_HIGHER)
+				&& !isLegacyBootstrapForgeStyle();
+	}
+
+	private String findJavaBinaryInComponent(String component) {
+		if (component == null || component.trim().isEmpty() || engine == null || engine.getGameFolder() == null) {
+			return null;
+		}
+
+		File runtimeDir = new File(engine.getGameFolder().getBinDir(), component);
+		File[] candidates = new File[] {
+				new File(runtimeDir, "bin" + File.separator + "java.exe"),
+				new File(runtimeDir, "bin" + File.separator + "javaw.exe"),
+				new File(runtimeDir, "bin" + File.separator + "java")
+		};
+
+		for (File candidate : candidates) {
+			if (candidate.exists()) {
+				return candidate.getAbsolutePath();
+			}
+		}
+
+		return null;
+	}
+
+	private boolean shouldInjectMinecraftLoggingConfiguration() {
+		return this.engine.getMinecraftVersion() != null
+				&& this.engine.getMinecraftVersion().getLogging() != null
+				&& !isModernForgeStyle()
+				&& !isForgeWrapperStyle();
+	}
+
+	private String filterIncompatibleLibrariesFromModernForgeClasspath(String classpath) {
+		if (classpath == null || classpath.trim().isEmpty()) {
+			return classpath;
+		}
+
+		String[] classpathEntries = classpath.split(java.util.regex.Pattern.quote(File.pathSeparator));
+		List<String> filtered = new ArrayList<String>();
+		Map<String, Integer> lastIndexByKey = new HashMap<String, Integer>();
+
+		for (int i = 0; i < classpathEntries.length; i++) {
+			String entry = classpathEntries[i] == null ? "" : classpathEntries[i].trim();
+			if (entry.isEmpty()) {
+				continue;
+			}
+			String libraryKey = resolveLibraryCoordinateKey(entry);
+			if (libraryKey != null && !libraryKey.isEmpty()) {
+				lastIndexByKey.put(libraryKey, i);
+			}
+		}
+
+		for (int i = 0; i < classpathEntries.length; i++) {
+			String entry = classpathEntries[i] == null ? "" : classpathEntries[i].trim();
+			if (entry.isEmpty()) {
+				continue;
+			}
+
+			String fileName = new File(entry).getName();
+			if ("log4j-api-2.8.1.jar".equalsIgnoreCase(fileName) || "log4j-core-2.8.1.jar".equalsIgnoreCase(fileName)) {
+				Logger.log("Skipping vanilla Log4j entry for modern Forge: " + entry);
+				continue;
+			}
+
+			String libraryKey = resolveLibraryCoordinateKey(entry);
+			Integer lastIndex = libraryKey == null ? null : lastIndexByKey.get(libraryKey);
+			if (lastIndex != null && lastIndex.intValue() != i && isPotentiallyConflictingModernForgeLibrary(libraryKey)) {
+				Logger.log("Skipping duplicated modern Forge library entry: " + entry);
+				continue;
+			}
+
+			filtered.add(entry);
+		}
+
+		return String.join(File.pathSeparator, filtered);
+	}
+
+	private boolean isPotentiallyConflictingModernForgeLibrary(String libraryKey) {
+		return libraryKey.startsWith("org.apache.logging.log4j:")
+				|| libraryKey.equals("net.sf.jopt-simple:jopt-simple")
+				|| libraryKey.equals("com.google.guava:guava")
+				|| libraryKey.equals("commons-io:commons-io")
+				|| libraryKey.equals("org.ow2.asm:asm")
+				|| libraryKey.equals("org.ow2.asm:asm-analysis")
+				|| libraryKey.equals("org.ow2.asm:asm-commons")
+				|| libraryKey.equals("org.ow2.asm:asm-tree")
+				|| libraryKey.equals("org.ow2.asm:asm-util");
+	}
+
+	private String resolveLibraryCoordinateKey(String path) {
+		if (path == null || path.trim().isEmpty()) {
+			return null;
+		}
+
+		String normalized = path.replace('\\', '/');
+		int libsIndex = normalized.indexOf("/libraries/");
+		if (libsIndex < 0) {
+			return null;
+		}
+
+		String relative = normalized.substring(libsIndex + "/libraries/".length());
+		String[] parts = relative.split("/");
+		if (parts.length < 4) {
+			return null;
+		}
+
+		String artifact = parts[parts.length - 3];
+		String version = parts[parts.length - 2];
+		if (artifact == null || artifact.trim().isEmpty() || version == null || version.trim().isEmpty()) {
+			return null;
+		}
+
+		StringBuilder group = new StringBuilder();
+		for (int i = 0; i < parts.length - 3; i++) {
+			if (group.length() > 0) {
+				group.append('.');
+			}
+			group.append(parts[i]);
+		}
+
+		if (group.length() == 0) {
+			return null;
+		}
+		return group + ":" + artifact;
+	}
+
+	private boolean isAcceptableModernForgeJava(String javaBinary) {
+		JavaBinaryVersion version = readJavaBinaryVersion(javaBinary);
+		if (version == null) {
+			return false;
+		}
+		if (version.major >= 9) {
+			return true;
+		}
+		if (version.major == 8) {
+			return version.update >= 101;
+		}
+		return false;
+	}
+
+	private JavaBinaryVersion readJavaBinaryVersion(String javaBinary) {
+		if (javaBinary == null || javaBinary.trim().isEmpty()) {
+			return null;
+		}
+		try {
+			ProcessBuilder pb = new ProcessBuilder(javaBinary, "-version");
+			pb.redirectErrorStream(true);
+			Process process = pb.start();
+			BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+			String line;
+			String firstLine = null;
+			while ((line = reader.readLine()) != null) {
+				if (firstLine == null && !line.trim().isEmpty()) {
+					firstLine = line.trim();
+				}
+			}
+			process.waitFor();
+			if (firstLine == null) {
+				return null;
+			}
+			return JavaBinaryVersion.parse(firstLine);
+		} catch (Exception ignored) {
+			return null;
+		}
+	}
+
+	private static final class JavaBinaryVersion {
+		private final int major;
+		private final int update;
+		private final String raw;
+
+		private JavaBinaryVersion(int major, int update, String raw) {
+			this.major = major;
+			this.update = update;
+			this.raw = raw;
+		}
+
+		private static JavaBinaryVersion parse(String rawLine) {
+			if (rawLine == null) {
+				return null;
+			}
+			String raw = rawLine;
+			int firstQuote = rawLine.indexOf('"');
+			int secondQuote = rawLine.indexOf('"', firstQuote + 1);
+			String version = (firstQuote >= 0 && secondQuote > firstQuote)
+					? rawLine.substring(firstQuote + 1, secondQuote)
+					: rawLine;
+
+			if (version.startsWith("1.")) {
+				String[] parts = version.split("[_\\.]");
+				int major = parts.length > 1 ? safeParse(parts[1]) : 8;
+				int update = parts.length > 3 ? safeParse(parts[3]) : 0;
+				return new JavaBinaryVersion(major, update, raw);
+			}
+
+			String[] parts = version.split("[._-]");
+			int major = parts.length > 0 ? safeParse(parts[0]) : 0;
+			return new JavaBinaryVersion(major, 0, raw);
+		}
+
+		private static int safeParse(String value) {
+			try {
+				return Integer.parseInt(value);
+			} catch (Exception ignored) {
+				return 0;
+			}
+		}
+	}
+
 	private List<String> getForgeJVMArguments() {
+		if (this.engine == null || this.engine.getGameForge() == null || this.engine.getGameForge().getArguments() == null
+				|| this.engine.getGameForge().getArguments().getJvm() == null) {
+			return Collections.emptyList();
+		}
 		List<String> forgeArgs = this.engine.getGameForge().getArguments().getJvm();
 		List<String> jvmArgs = new ArrayList<>();
 		for (String arg : forgeArgs) {
-			jvmArgs.add(arg.replace("${version_name}","minecraft")
-					.replace("${library_directory}",this.engine.getGameFolder().getLibsDir().getAbsolutePath())
-					.replace("${classpath_separator}",System.getProperty("path.separator")));
+			String resolved = arg.replace("${version_name}", "minecraft")
+					.replace("${library_directory}", this.engine.getGameFolder().getLibsDir().getAbsolutePath())
+					.replace("${classpath_separator}", System.getProperty("path.separator"));
+			resolved = replaceLaunchPlaceholders(resolved);
+			if (resolved.startsWith("-DignoreList=")) {
+				resolved = "-DignoreList=" + expandIgnoreList(resolved.substring("-DignoreList=".length()));
+			}
+			jvmArgs.add(resolved);
 		}
 		return jvmArgs;
+	}
+
+	private String expandIgnoreList(String rawValue) {
+		LinkedHashSet<String> values = new LinkedHashSet<String>();
+		if (rawValue != null && !rawValue.trim().isEmpty()) {
+			for (String item : rawValue.split(",")) {
+				String trimmed = item == null ? "" : item.trim();
+				if (!trimmed.isEmpty()) {
+					values.add(trimmed);
+					if (trimmed.equals("asm")) {
+						values.add("ow2-asm");
+					} else if (trimmed.startsWith("asm-")) {
+						values.add("ow2-" + trimmed);
+					} else if (trimmed.equals("securejarhandler")) {
+						values.add("securemodules");
+					}
+				}
+			}
+		}
+		return String.join(",", values);
+	}
+
+	private String filterModulePathEntriesFromClasspath(String classpath, List<String> forgeJvmArguments) {
+		if (classpath == null || classpath.trim().isEmpty()) {
+			return classpath;
+		}
+
+		Set<String> modulePathEntries = extractModulePathEntries(forgeJvmArguments);
+		if (modulePathEntries.isEmpty()) {
+			return classpath;
+		}
+
+		String separatorRegex = java.util.regex.Pattern.quote(File.pathSeparator);
+		String[] classpathEntries = classpath.split(separatorRegex);
+		List<String> filtered = new ArrayList<String>();
+
+		for (String entry : classpathEntries) {
+			String trimmed = entry == null ? "" : entry.trim();
+			if (trimmed.isEmpty()) {
+				continue;
+			}
+			String normalized = normalizePath(trimmed);
+			if (modulePathEntries.contains(normalized)) {
+				Logger.log("Skipping duplicated module path entry from classpath: " + trimmed);
+				continue;
+			}
+			filtered.add(trimmed);
+		}
+
+		return String.join(File.pathSeparator, filtered);
+	}
+
+
+	private boolean isLegacyBootstrapForgeStyle() {
+		return ForgeLaunchResolver.resolveMode(engine) == ForgeLaunchResolver.Mode.LEGACY_BOOTSTRAP_LAUNCHER;
+	}
+
+	private boolean isForgeWrapperStyle() {
+		return ForgeLaunchResolver.resolveMode(engine) == ForgeLaunchResolver.Mode.FORGE_WRAPPER;
+	}
+
+	private void addForgeWrapperProperties(List<String> commands) {
+		if (engine == null || engine.getGameUpdater() == null) {
+			return;
+		}
+
+		File installer = engine.getGameUpdater().getForgeInstallerJar();
+		File minecraftJar = engine.getGameUpdater().getClientJarFile();
+		if (installer != null && installer.exists()) {
+			commands.add("-Dforgewrapper.installer=" + installer.getAbsolutePath());
+		}
+		commands.add("-Dforgewrapper.librariesDir=" + engine.getGameFolder().getLibsDir().getAbsolutePath());
+		if (minecraftJar != null && minecraftJar.exists()) {
+			commands.add("-Dforgewrapper.minecraft=" + minecraftJar.getAbsolutePath());
+		}
+	}
+
+	private String filterLegacyForgeVersionJarFromClasspath(String classpath) {
+		if (classpath == null || classpath.trim().isEmpty() || engine == null || engine.getMinecraftVersion() == null) {
+			return classpath;
+		}
+
+		String versionId = engine.getMinecraftVersion().getId();
+		if (versionId == null || versionId.trim().isEmpty()) {
+			return classpath;
+		}
+
+		String expectedFileName = versionId + ".jar";
+		String separatorRegex = java.util.regex.Pattern.quote(File.pathSeparator);
+		String[] classpathEntries = classpath.split(separatorRegex);
+		List<String> filtered = new ArrayList<String>();
+
+		for (String entry : classpathEntries) {
+			String trimmed = entry == null ? "" : entry.trim();
+			if (trimmed.isEmpty()) {
+				continue;
+			}
+
+			String fileName = new File(trimmed).getName();
+			if (expectedFileName.equalsIgnoreCase(fileName)) {
+				Logger.log("Skipping legacy Forge duplicated Minecraft version jar from classpath: " + trimmed);
+				continue;
+			}
+
+			filtered.add(trimmed);
+		}
+
+		return String.join(File.pathSeparator, filtered);
+	}
+
+	private String filterForgeWrapperClasspath(String classpath) {
+		if (classpath == null || classpath.trim().isEmpty() || engine == null || engine.getGameUpdater() == null) {
+			return classpath;
+		}
+
+		String forgeFullVersion = engine.getGameUpdater().getForgeFullVersion();
+		if (forgeFullVersion == null || forgeFullVersion.trim().isEmpty()) {
+			return classpath;
+		}
+
+		String separatorRegex = java.util.regex.Pattern.quote(File.pathSeparator);
+		String[] classpathEntries = classpath.split(separatorRegex);
+		List<String> filtered = new ArrayList<String>();
+		String directForgeJarName = "forge-" + forgeFullVersion + ".jar";
+		String clientForgeJarName = "forge-" + forgeFullVersion + "-client.jar";
+
+		for (String entry : classpathEntries) {
+			String trimmed = entry == null ? "" : entry.trim();
+			if (trimmed.isEmpty()) {
+				continue;
+			}
+
+			String fileName = new File(trimmed).getName();
+			if (directForgeJarName.equalsIgnoreCase(fileName) || clientForgeJarName.equalsIgnoreCase(fileName)) {
+				Logger.log("Skipping direct Forge artifact from ForgeWrapper classpath: " + trimmed);
+				continue;
+			}
+			filtered.add(trimmed);
+		}
+
+		return String.join(File.pathSeparator, filtered);
+	}
+
+	private Set<String> extractModulePathEntries(List<String> forgeJvmArguments) {
+		Set<String> entries = new LinkedHashSet<String>();
+		if (forgeJvmArguments == null || forgeJvmArguments.isEmpty()) {
+			return entries;
+		}
+
+		for (int i = 0; i < forgeJvmArguments.size(); i++) {
+			String arg = forgeJvmArguments.get(i);
+			if ("-p".equals(arg) || "--module-path".equals(arg)) {
+				if (i + 1 < forgeJvmArguments.size()) {
+					addPathListEntries(entries, forgeJvmArguments.get(i + 1));
+				}
+			} else if (arg != null && arg.startsWith("-p")) {
+				String value = arg.substring(2).trim();
+				if (!value.isEmpty()) {
+					addPathListEntries(entries, value);
+				}
+			} else if (arg != null && arg.startsWith("--module-path=")) {
+				addPathListEntries(entries, arg.substring("--module-path=".length()));
+			}
+		}
+		return entries;
+	}
+
+	private void addPathListEntries(Set<String> entries, String rawPathList) {
+		if (rawPathList == null || rawPathList.trim().isEmpty()) {
+			return;
+		}
+		String separatorRegex = java.util.regex.Pattern.quote(File.pathSeparator);
+		String[] paths = rawPathList.split(separatorRegex);
+		for (String path : paths) {
+			String trimmed = path == null ? "" : path.trim();
+			if (!trimmed.isEmpty()) {
+				entries.add(normalizePath(trimmed));
+			}
+		}
+	}
+
+	private String normalizePath(String path) {
+		try {
+			return new File(path).getCanonicalPath();
+		} catch (IOException ignored) {
+			return new File(path).getAbsolutePath();
+		}
 	}
 
 	/**
@@ -279,7 +753,68 @@ public class GameRunner {
 	 * @return A List<String> of specifics arguments
 	 */
 	private List<String> getForgeArguments() {
-		return engine.getGameForge().getArguments().getGame();
+		List<String> rawArgs = engine.getGameForge().getArguments().getGame();
+		List<String> resolved = new ArrayList<String>();
+		for (String arg : rawArgs) {
+			String value = replaceLaunchPlaceholders(arg);
+			if (value.contains("${")) {
+				continue;
+			}
+			resolved.add(value);
+		}
+		return resolved;
+	}
+
+	private String replaceLaunchPlaceholders(String value) {
+		if (value == null || value.isEmpty()) {
+			return value;
+		}
+
+		Map<String, String> values = new HashMap<String, String>();
+		values.put("auth_player_name", this.session != null ? safe(this.session.getUsername()) : "");
+		values.put("auth_uuid", this.session != null ? safe(this.session.getUuid()) : "");
+		values.put("auth_access_token", this.session != null ? safe(this.session.getToken()) : "");
+		values.put("version_name", this.engine != null && this.engine.getMinecraftVersion() != null ? safe(this.engine.getMinecraftVersion().getId()) : "");
+		values.put("version_type", "release");
+		values.put("game_directory", this.engine != null ? safe(this.engine.getGameFolder().getPlayDir().getAbsolutePath()) : "");
+		values.put("assets_root", this.engine != null ? safe(this.engine.getGameFolder().getAssetsDir().getAbsolutePath()) : "");
+		values.put("assets_index_name", this.engine != null && this.engine.getMinecraftVersion() != null ? safe(this.engine.getMinecraftVersion().getAssets()) : "");
+		values.put("user_type", "legacy");
+		values.put("user_properties", "{}");
+
+		String reflectedClientId = invokeSessionStringGetter("getClientId");
+		String reflectedXuid = invokeSessionStringGetter("getXuid");
+		if (!reflectedClientId.isEmpty()) {
+			values.put("clientid", reflectedClientId);
+			values.put("client_id", reflectedClientId);
+		}
+		if (!reflectedXuid.isEmpty()) {
+			values.put("auth_xuid", reflectedXuid);
+			values.put("xuid", reflectedXuid);
+		}
+
+		String resolved = value;
+		for (Map.Entry<String, String> entry : values.entrySet()) {
+			resolved = resolved.replace("${" + entry.getKey() + "}", safe(entry.getValue()));
+		}
+		return resolved;
+	}
+
+	private String invokeSessionStringGetter(String methodName) {
+		if (this.session == null || methodName == null || methodName.trim().isEmpty()) {
+			return "";
+		}
+		try {
+			java.lang.reflect.Method method = this.session.getClass().getMethod(methodName);
+			Object value = method.invoke(this.session);
+			return value == null ? "" : String.valueOf(value);
+		} catch (Exception ignored) {
+			return "";
+		}
+	}
+
+	private String safe(String value) {
+		return value == null ? "" : value;
 	}
 
 	/**
