@@ -1,6 +1,11 @@
 package fr.trxyy.alternative.alternative_api.utils.file;
 
 import fr.trxyy.alternative.alternative_api.*;
+import fr.trxyy.alternative.alternative_api.minecraft.json.DownloadInfo;
+import fr.trxyy.alternative.alternative_api.minecraft.json.MinecraftLibrary;
+import fr.trxyy.alternative.alternative_api.minecraft.json.MinecraftVersion;
+import fr.trxyy.alternative.alternative_api.minecraft.utils.Arch;
+import fr.trxyy.alternative.alternative_api.utils.OperatingSystem;
 
 import java.io.*;
 import java.math.*;
@@ -30,96 +35,135 @@ public class FileUtil {
 	public static void deleteFakeNatives(File targetDir, GameEngine engine) throws IOException {
 	    int currentPlatform = getPlatform();
 	    File[] listOfFiles = engine.getGameFolder().getNativesDir().listFiles();
-	    for (int index = 0; index < Objects.requireNonNull(listOfFiles).length; index++) {
-	        move(engine.getGameFolder().getNativesDir(), engine.getGameFolder().getNativesDir());
-	        if (listOfFiles[index].isFile()) {
-	            String fileName = listOfFiles[index].getName();
-	            boolean shouldDelete = false;
-	            
-	            if (currentPlatform == 1 || currentPlatform == 2) { // Linux/Unix
-	                shouldDelete = !(fileName.endsWith(".so"));
-	            } else if (currentPlatform == 3) { // Windows
-	                shouldDelete = !(fileName.endsWith(".dll"));
-	            } else if (currentPlatform == 4) { // Mac
-	                shouldDelete = !(fileName.endsWith(".dylib") || fileName.endsWith(".jnilib"));
-	            } else {
-	                // Syst�me d'exploitation inconnu
-	                shouldDelete = true;
-	            }
-	            
-	            if (shouldDelete) {
-	                listOfFiles[index].delete();
-	            }
+	    if (listOfFiles == null) {
+	        return;
+	    }
+
+	    move(engine.getGameFolder().getNativesDir(), engine.getGameFolder().getNativesDir());
+
+	    for (File file : listOfFiles) {
+	        if (file == null || !file.exists()) {
+	            continue;
+	        }
+
+	        if (file.isDirectory()) {
+	            deleteFolder(file);
+	            continue;
+	        }
+
+	        String fileName = file.getName().toLowerCase(Locale.ROOT);
+	        boolean isNativeForCurrentPlatform;
+
+	        if (currentPlatform == 1 || currentPlatform == 2) { // Linux/Unix
+	            isNativeForCurrentPlatform = fileName.endsWith(".so");
+	        } else if (currentPlatform == 3) { // Windows
+	            isNativeForCurrentPlatform = fileName.endsWith(".dll");
+	        } else if (currentPlatform == 4) { // Mac
+	            isNativeForCurrentPlatform = fileName.endsWith(".dylib") || fileName.endsWith(".jnilib");
 	        } else {
-	            deleteFolder(listOfFiles[index]);
+	            isNativeForCurrentPlatform = false;
+	        }
+
+	        if (!isNativeForCurrentPlatform) {
+	            file.delete();
 	        }
 	    }
 	}
 
-	/**
-	 * Unpack natives in a designed folder
-	 * @param targetDir The target directory
-	 * @param engine The GameEngine instance
-	 * @throws IOException
-	 */
-	public static void unpackNatives(File targetDir, GameEngine engine) throws IOException {
-	    int currentPlatform = getPlatform();
-	    File[] listOfFiles = engine.getGameFolder().getNativesCacheDir().listFiles();
-	    for (int index = 0; index < listOfFiles.length; index++) {
-	        if (listOfFiles[index].isFile()) {
-	            ZipFile zip = new ZipFile(listOfFiles[index]);
-	            try {
-	                Enumeration<? extends ZipEntry> entries = zip.entries();
-	                while (entries.hasMoreElements()) {
-	                    ZipEntry entry = (ZipEntry) entries.nextElement();
-	                    String entryName = entry.getName();
+    /**
+     * Unpack natives in a designed folder
+     * @param targetDir The target directory
+     * @param engine The GameEngine instance
+     * @throws IOException
+     */
+    public static void unpackNatives(File targetDir, GameEngine engine) throws IOException {
+        int currentPlatform = getPlatform();
 
-	                    // Filtrer les natives en fonction du syst�me d'exploitation actuel
-	                    if (currentPlatform == 1 || currentPlatform == 2) { // Linux/Unix
-	                        if (!entryName.endsWith(".so")) {
-	                            continue;
-	                        }
-	                    } else if (currentPlatform == 3) { // Windows
-	                        if (!entryName.endsWith(".dll")) {
-	                            continue;
-	                        }
-	                    } else if (currentPlatform == 4) { // Mac
-	                        if (!entryName.endsWith(".dylib") && !entryName.endsWith(".jnilib")) {
-	                            continue;
-	                        }
-	                    } else {
-	                        // Syst�me d'exploitation inconnu
-	                        continue;
-	                    }
+        if (targetDir.exists()) {
+            File[] existingFiles = targetDir.listFiles();
+            if (existingFiles != null) {
+                for (File existing : existingFiles) {
+                    if (existing.isDirectory()) {
+                        deleteFolder(existing);
+                    } else {
+                        existing.delete();
+                    }
+                }
+            }
+        } else {
+            targetDir.mkdirs();
+        }
 
-	                    File targetFile = new File(targetDir, entryName);
-	                    if (targetFile.getParentFile() != null) {
-	                        targetFile.getParentFile().mkdirs();
-	                    }
-	                    if (!entry.isDirectory()) {
-	                        BufferedInputStream inputStream = new BufferedInputStream(zip.getInputStream(entry));
+        Set<String> allowedNativeArchives = resolveCurrentNativeArchiveNames(engine);
+        if (allowedNativeArchives.isEmpty()) {
+            return;
+        }
 
-	                        byte[] buffer = new byte[2048];
-	                        FileOutputStream outputStream = new FileOutputStream(targetFile);
-	                        BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
-	                        try {
-	                            int length;
-	                            while ((length = inputStream.read(buffer, 0, buffer.length)) != -1) {
-	                                bufferedOutputStream.write(buffer, 0, length);
-	                            }
-	                        } finally {
-	                            closeSilently(bufferedOutputStream);
-	                            closeSilently(outputStream);
-	                            closeSilently(inputStream);
-	                        }
-	                    }
-	                }
-	            } finally {
-	                zip.close();
-	            }
-	        }
-	    }
-	}
+        File[] listOfFiles = engine.getGameFolder().getNativesCacheDir().listFiles();
+        if (listOfFiles == null) {
+            return;
+        }
+
+        for (File nativeArchive : listOfFiles) {
+            if (nativeArchive == null || !nativeArchive.isFile()) {
+                continue;
+            }
+
+            if (!allowedNativeArchives.contains(nativeArchive.getName())) {
+                continue;
+            }
+
+            ZipFile zip = new ZipFile(nativeArchive);
+            try {
+                Enumeration<? extends ZipEntry> entries = zip.entries();
+                while (entries.hasMoreElements()) {
+                    ZipEntry entry = entries.nextElement();
+                    String entryName = entry.getName();
+
+                    if (currentPlatform == 1 || currentPlatform == 2) { // Linux/Unix
+                        if (!entryName.endsWith(".so")) {
+                            continue;
+                        }
+                    } else if (currentPlatform == 3) { // Windows
+                        if (!entryName.endsWith(".dll")) {
+                            continue;
+                        }
+                    } else if (currentPlatform == 4) { // Mac
+                        if (!entryName.endsWith(".dylib") && !entryName.endsWith(".jnilib")) {
+                            continue;
+                        }
+                    } else {
+                        continue;
+                    }
+
+                    File targetFile = new File(targetDir, entryName);
+                    File parent = targetFile.getParentFile();
+                    if (parent != null) {
+                        parent.mkdirs();
+                    }
+
+                    if (!entry.isDirectory()) {
+                        BufferedInputStream inputStream = new BufferedInputStream(zip.getInputStream(entry));
+                        FileOutputStream outputStream = new FileOutputStream(targetFile);
+                        BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
+                        try {
+                            byte[] buffer = new byte[2048];
+                            int length;
+                            while ((length = inputStream.read(buffer, 0, buffer.length)) != -1) {
+                                bufferedOutputStream.write(buffer, 0, length);
+                            }
+                        } finally {
+                            closeSilently(bufferedOutputStream);
+                            closeSilently(outputStream);
+                            closeSilently(inputStream);
+                        }
+                    }
+                }
+            } finally {
+                zip.close();
+            }
+        }
+    }
 	
 	
 	private static void move(File toDir, File currDir) {
@@ -442,4 +486,133 @@ public class FileUtil {
             return 4;
         return 5;
     }
+    
+    private static Set<String> resolveCurrentNativeArchiveNames(GameEngine engine) {
+        LinkedHashSet<String> archiveNames = new LinkedHashSet<String>();
+        MinecraftVersion version = resolveCurrentMinecraftVersion(engine);
+        if (version == null || version.getLibraries() == null) {
+            return archiveNames;
+        }
+
+        for (MinecraftLibrary lib : version.getLibraries()) {
+            if (lib == null || lib.isSkipped() || !lib.appliesToCurrentEnvironment() || !declaredNativeMatchesCurrentEnvironment(lib)) {
+                continue;
+            }
+
+            if (isNativeCoordinateLibrary(lib)) {
+                String nativeFileName = resolveDeclaredNativeFileName(lib);
+                if (nativeFileName != null && !nativeFileName.trim().isEmpty()) {
+                    archiveNames.add(nativeFileName);
+                }
+                continue;
+            }
+
+            String classifier = resolveNativeClassifier(lib);
+            if (classifier != null) {
+                String nativeFileName = lib.getArtifactNatives(classifier);
+                if (nativeFileName != null && !nativeFileName.trim().isEmpty()) {
+                    archiveNames.add(nativeFileName);
+                }
+            }
+        }
+
+        return archiveNames;
+    }
+    
+    private static MinecraftVersion resolveCurrentMinecraftVersion(GameEngine engine) {
+        if (engine == null) {
+            return null;
+        }
+        if (engine.getMinecraftVersion() != null) {
+            return engine.getMinecraftVersion();
+        }
+        if (engine.getGameUpdater() != null) {
+            return engine.getGameUpdater().getLocalVersion();
+        }
+        return null;
+    }
+    
+    private static boolean isNativeCoordinateLibrary(MinecraftLibrary lib) {
+        return lib != null && lib.isDeclaredNativeLibrary();
+    }
+
+    private static boolean declaredNativeMatchesCurrentEnvironment(MinecraftLibrary lib) {
+        return lib == null || lib.declaredNativeMatchesCurrentEnvironment();
+    }
+
+    private static String resolveDeclaredNativeFileName(MinecraftLibrary lib) {
+        try {
+            if (lib.getDownloads() != null && lib.getDownloads().getArtifact() != null
+                    && lib.getDownloads().getArtifact().getPath() != null
+                    && !lib.getDownloads().getArtifact().getPath().trim().isEmpty()) {
+                return new File(lib.getDownloads().getArtifact().getPath()).getName();
+            }
+        } catch (Exception ignored) {
+        }
+        return lib == null ? null : lib.getArtifactFilename(null);
+    }
+
+    private static String resolveNativeClassifier(MinecraftLibrary lib) {
+        if (lib == null || !lib.hasNatives() || lib.getDownloads() == null || lib.getDownloads().getClassifiers() == null) {
+            return null;
+        }
+
+        Map<String, DownloadInfo> classifiers = lib.getDownloads().getClassifiers();
+        if (classifiers.isEmpty()) {
+            return null;
+        }
+
+        String classifier = null;
+        if (lib.getNatives() != null) {
+            classifier = lib.getNatives().get(OperatingSystem.getCurrent());
+        }
+
+        if (classifier != null) {
+            classifier = classifier.replace("${arch}", Arch.CURRENT.getBit());
+            if (classifiers.containsKey(classifier)) {
+                return classifier;
+            }
+        }
+
+        List<String> candidates = new ArrayList<String>();
+        OperatingSystem currentOs = OperatingSystem.getCurrent();
+        if (currentOs == OperatingSystem.WINDOWS) {
+            if (Arch.CURRENT == Arch.x86) {
+                candidates.add("natives-windows-x86");
+                candidates.add("natives-windows");
+            } else {
+                candidates.add("natives-windows");
+                candidates.add("natives-windows-x86");
+            }
+            candidates.add("natives-windows-arm64");
+        } else if (currentOs == OperatingSystem.LINUX) {
+            candidates.add("natives-linux");
+        } else if (currentOs == OperatingSystem.OSX) {
+            candidates.add("natives-macos");
+            candidates.add("natives-osx");
+            candidates.add("natives-osx-arm64");
+        }
+
+        for (String candidate : candidates) {
+            if (classifiers.containsKey(candidate)) {
+                return candidate;
+            }
+        }
+
+        for (String key : classifiers.keySet()) {
+            String lower = key.toLowerCase(Locale.ROOT);
+            if (currentOs == OperatingSystem.WINDOWS && lower.contains("windows") && !lower.contains("arm64")) {
+                return key;
+            }
+            if (currentOs == OperatingSystem.LINUX && lower.contains("linux")) {
+                return key;
+            }
+            if (currentOs == OperatingSystem.OSX && (lower.contains("osx") || lower.contains("macos"))) {
+                return key;
+            }
+        }
+
+        return null;
+    }
+
 }

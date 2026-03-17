@@ -4,9 +4,11 @@ import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.URLConnection;
 
 import fr.trxyy.alternative.alternative_api.GameEngine;
 import fr.trxyy.alternative.alternative_api.GameVerifier;
@@ -101,20 +103,25 @@ public class Downloader extends Thread {
         }
 
         File partFile = new File(this.file.getAbsolutePath() + ".part");
-        HttpURLConnection connection = null;
+        HttpURLConnection httpConnection = null;
 
         try {
-            connection = (HttpURLConnection) new URL(this.url.replace(" ", "%20")).openConnection();
+            URLConnection connection = new URL(this.url.replace(" ", "%20")).openConnection();
             connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
             connection.setReadTimeout(READ_TIMEOUT_MS);
-            connection.setRequestProperty("User-Agent", "MajestyLauncher");
 
-            int responseCode = connection.getResponseCode();
-            if (responseCode < 200 || responseCode >= 300) {
-                throw new IOException("HTTP " + responseCode);
+            if (connection instanceof HttpURLConnection) {
+                httpConnection = (HttpURLConnection) connection;
+                httpConnection.setRequestProperty("User-Agent", "MajestyLauncher");
+
+                int responseCode = httpConnection.getResponseCode();
+                if (responseCode < 200 || responseCode >= 300) {
+                    throw new IOException("HTTP " + responseCode);
+                }
             }
 
-            try (BufferedInputStream bufferedInputStream = new BufferedInputStream(connection.getInputStream());
+            try (InputStream inputStream = connection.getInputStream();
+                 BufferedInputStream bufferedInputStream = new BufferedInputStream(inputStream);
                  FileOutputStream fileOutputStream = new FileOutputStream(partFile)) {
 
                 byte[] data = new byte[8192];
@@ -142,8 +149,8 @@ public class Downloader extends Thread {
             Logger.err(e.getLocalizedMessage() + " " + this.url);
             throw e;
         } finally {
-            if (connection != null) {
-                connection.disconnect();
+            if (httpConnection != null) {
+                httpConnection.disconnect();
             }
         }
     }

@@ -26,6 +26,8 @@ import com.google.gson.*;
  */
 public class GameUpdater extends Thread {
 
+    private static final java.util.concurrent.atomic.AtomicBoolean UPDATE_RUNNING = new java.util.concurrent.atomic.AtomicBoolean(false);
+
     /**
      * The custom files to download in a HashMap
      */
@@ -235,6 +237,11 @@ public class GameUpdater extends Thread {
      */
     @Override
     public void run() {
+        if (!UPDATE_RUNNING.compareAndSet(false, true)) {
+            Logger.log("Another update/launch is already running, ignoring duplicate request.");
+            return;
+        }
+        try {
         /** -------------------------------------- */
         this.resetState();
         this.HOST = engine.getGameLinks().getBaseUrl();
@@ -439,6 +446,9 @@ public class GameUpdater extends Thread {
             } catch (Exception e) {
                 e.printStackTrace();
             }
+        }
+        } finally {
+            UPDATE_RUNNING.set(false);
         }
     }
 
@@ -1416,6 +1426,94 @@ public class GameUpdater extends Thread {
                     .replace('/', File.separatorChar));
             jars.put("net.minecraftforge:forge:" + fullVersion + ":universal", libPath.getAbsolutePath());
 
+            // Ajoute le launchwrapper vanilla requis par legacy Forge (absent du classpath sinon)
+            String lwVersion = resolveLegacyLaunchwrapperVersion(mcVersion);
+            String lwArtifactPath = "net/minecraft/launchwrapper/" + lwVersion + "/launchwrapper-" + lwVersion + ".jar";
+            File lwFile = new File(engine.getGameFolder().getLibsDir(), lwArtifactPath);
+            GameVerifier.addToFileList(lwFile.getAbsolutePath()
+                    .replace(engine.getGameFolder().getGameDir().getAbsolutePath(), "")
+                    .replace('/', File.separatorChar));
+            jars.put("net.minecraft:launchwrapper:" + lwVersion, lwFile.getAbsolutePath());
+            if (!lwFile.exists() || lwFile.length() == 0L) {
+                lwFile.getParentFile().mkdirs();
+                String lwUrl = "https://libraries.minecraft.net/" + lwArtifactPath;
+                final Downloader lwTask = new Downloader(lwFile, lwUrl, null, engine);
+                if (lwTask.requireUpdate()) {
+                    this.filesToDownload++;
+                    this.customJarsExecutor.submit(lwTask);
+                }
+            }
+
+            // Ajoute ASM requis par legacy Forge pour CoreMods (org.objectweb.asm.ClassVisitor)
+            String asmVersion = resolveLegacyAsmVersion(mcVersion);
+            String asmArtifactPath = "org/ow2/asm/asm-all/" + asmVersion + "/asm-all-" + asmVersion + ".jar";
+            File asmFile = new File(engine.getGameFolder().getLibsDir(), asmArtifactPath);
+            GameVerifier.addToFileList(asmFile.getAbsolutePath()
+                    .replace(engine.getGameFolder().getGameDir().getAbsolutePath(), "")
+                    .replace('/', File.separatorChar));
+            jars.put("org.ow2.asm:asm-all:" + asmVersion, asmFile.getAbsolutePath());
+            if (!asmFile.exists() || asmFile.length() == 0L) {
+                asmFile.getParentFile().mkdirs();
+                String asmUrl = "https://libraries.minecraft.net/" + asmArtifactPath;
+                final Downloader asmTask = new Downloader(asmFile, asmUrl, null, engine);
+                if (asmTask.requireUpdate()) {
+                    this.filesToDownload++;
+                    this.customJarsExecutor.submit(asmTask);
+                }
+            }
+
+            // Ajoute LZMA requis par PatchingTransformer de Forge (LZMA.LzmaInputStream)
+            String lzmaArtifactPath = "lzma/lzma/0.0.1/lzma-0.0.1.jar";
+            File lzmaFile = new File(engine.getGameFolder().getLibsDir(), lzmaArtifactPath);
+            GameVerifier.addToFileList(lzmaFile.getAbsolutePath()
+                    .replace(engine.getGameFolder().getGameDir().getAbsolutePath(), "")
+                    .replace('/', File.separatorChar));
+            jars.put("lzma:lzma:0.0.1", lzmaFile.getAbsolutePath());
+            if (!lzmaFile.exists() || lzmaFile.length() == 0L) {
+                lzmaFile.getParentFile().mkdirs();
+                String lzmaUrl = "https://libraries.minecraft.net/" + lzmaArtifactPath;
+                final Downloader lzmaTask = new Downloader(lzmaFile, lzmaUrl, null, engine);
+                if (lzmaTask.requireUpdate()) {
+                    this.filesToDownload++;
+                    this.customJarsExecutor.submit(lzmaTask);
+                }
+            }
+
+            // Ajoute trove4j requis par Forge (gnu.trove.map.hash.TByteObjectHashMap)
+            String troveVersion = resolveLegacyTroveVersion(mcVersion);
+            String troveArtifactPath = "net/sf/trove4j/trove4j/" + troveVersion + "/trove4j-" + troveVersion + ".jar";
+            File troveFile = new File(engine.getGameFolder().getLibsDir(), troveArtifactPath);
+            GameVerifier.addToFileList(troveFile.getAbsolutePath()
+                    .replace(engine.getGameFolder().getGameDir().getAbsolutePath(), "")
+                    .replace('/', File.separatorChar));
+            jars.put("net.sf.trove4j:trove4j:" + troveVersion, troveFile.getAbsolutePath());
+            if (!troveFile.exists() || troveFile.length() == 0L) {
+                troveFile.getParentFile().mkdirs();
+                String troveUrl = "https://libraries.minecraft.net/" + troveArtifactPath;
+                final Downloader troveTask = new Downloader(troveFile, troveUrl, null, engine);
+                if (troveTask.requireUpdate()) {
+                    this.filesToDownload++;
+                    this.customJarsExecutor.submit(troveTask);
+                }
+            }
+
+            // Ajoute vecmath requis par Forge ModelLoader (javax.vecmath.Tuple4f)
+            String vecmathArtifactPath = "java3d/vecmath/1.5.2/vecmath-1.5.2.jar";
+            File vecmathFile = new File(engine.getGameFolder().getLibsDir(), vecmathArtifactPath);
+            GameVerifier.addToFileList(vecmathFile.getAbsolutePath()
+                    .replace(engine.getGameFolder().getGameDir().getAbsolutePath(), "")
+                    .replace('/', File.separatorChar));
+            jars.put("java3d:vecmath:1.5.2", vecmathFile.getAbsolutePath());
+            if (!vecmathFile.exists() || vecmathFile.length() == 0L) {
+                vecmathFile.getParentFile().mkdirs();
+                String vecmathUrl = "https://libraries.minecraft.net/" + vecmathArtifactPath;
+                final Downloader vecmathTask = new Downloader(vecmathFile, vecmathUrl, null, engine);
+                if (vecmathTask.requireUpdate()) {
+                    this.filesToDownload++;
+                    this.customJarsExecutor.submit(vecmathTask);
+                }
+            }
+
             if (libPath.exists()) {
                 return;
             }
@@ -1433,6 +1531,24 @@ public class GameUpdater extends Thread {
         } catch (Exception e) {
             this.registerDownloadFailure(new File(engine.getGameFolder().getLibsDir(), "net/minecraftforge/forge/legacy-forge-placeholder.jar"), "official forge maven", (e instanceof Exception) ? (Exception) e : new Exception(e));
         }
+    }
+
+    private String resolveLegacyLaunchwrapperVersion(String mcVersion) {
+        if (mcVersion != null && mcVersion.startsWith("1.7")) {
+            return "1.9";
+        }
+        return "1.12"; // 1.8 -> 1.12.2
+    }
+
+    private String resolveLegacyAsmVersion(String mcVersion) {
+        if (mcVersion != null && mcVersion.startsWith("1.7")) {
+            return "4.2";
+        }
+        return "5.0.3"; // 1.8 -> 1.12.2
+    }
+
+    private String resolveLegacyTroveVersion(String mcVersion) {
+        return "3.0.3"; // version utilisee par Forge 1.8 -> 1.12.2
     }
 
 
@@ -2064,12 +2180,18 @@ public class GameUpdater extends Thread {
 
 
     private boolean usesRemoteCustomFiles() {
+        if (this.engine.getGameStyle().equals(GameStyle.OPTIFINE)) {
+            return false;
+        }
         return !this.isForge()
                 && !this.engine.getGameStyle().equals(GameStyle.VANILLA)
                 && !this.engine.getGameStyle().equals(GameStyle.VANILLA_1_19_HIGHER);
     }
 
     private boolean usesOfflineCustomFiles() {
+        if (this.engine.getGameStyle().equals(GameStyle.OPTIFINE)) {
+            return false;
+        }
         return !this.isForge()
                 && !this.engine.getGameStyle().equals(GameStyle.VANILLA)
                 && !this.engine.getGameStyle().equals(GameStyle.VANILLA_1_19_HIGHER);
@@ -2246,7 +2368,6 @@ public class GameUpdater extends Thread {
     /**
      * @return If the host is reachable
      */
-    @SuppressWarnings("deprecation")
 	public boolean isOnline() {
         try {
             URL url = new URL(HOST);

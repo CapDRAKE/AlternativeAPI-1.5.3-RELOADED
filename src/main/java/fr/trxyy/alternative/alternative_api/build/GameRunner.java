@@ -66,12 +66,7 @@ public class GameRunner {
         processBuilder.redirectError(Redirect.INHERIT);
 		processBuilder.directory(engine.getGameFolder().getGameDir());
 		processBuilder.redirectErrorStream(true);
-		String cmds = "";
-		for (String command : commands) {
-			cmds += command + " ";
-		}
-		String[] ary = cmds.split(" ");
-		Logger.log("Launching: " + hideAccessToken(ary));
+		Logger.log("Launching: " + hideAccessToken(commands));
 		try {
 			Process process = processBuilder.start();
 			process.waitFor();
@@ -269,36 +264,39 @@ public class GameRunner {
 
 	private String resolveJavaBinaryForLaunch() {
 		String preferredComponent = resolvePreferredJavaComponentForLaunch();
+		String preferredBinary = null;
 		if (preferredComponent != null && !preferredComponent.trim().isEmpty()) {
-			String runtimeBinary = findJavaBinaryInComponent(preferredComponent);
-			if (runtimeBinary != null && (!isModernForgeStyle() || isAcceptableModernForgeJava(runtimeBinary))) {
-				return runtimeBinary;
+			preferredBinary = findJavaBinaryInComponent(preferredComponent);
+			if (preferredBinary != null && isAcceptableLaunchJava(preferredBinary)) {
+				Logger.log("Using bundled Java runtime: " + describeJavaBinary(preferredBinary));
+				return preferredBinary;
+			}
+			if (preferredBinary != null) {
+				Logger.log("Bundled Java runtime rejected for this launch: " + describeJavaBinary(preferredBinary));
 			}
 		}
 
 		if (isModernForgeStyle()) {
 			String alphaBinary = findJavaBinaryInComponent(EnumJavaVersion.JAVA_RUNTIME_ALPHA.getCode());
-			if (alphaBinary != null && isAcceptableModernForgeJava(alphaBinary)) {
+			if (alphaBinary != null && isAcceptableLaunchJava(alphaBinary)) {
+				Logger.log("Using alpha Java runtime fallback: " + describeJavaBinary(alphaBinary));
 				return alphaBinary;
 			}
 		}
 
-		if (this.engine.isOnline()) {
-			if (this.engine.getMinecraftVersion().getJavaVersion() != null) {
-				String component = this.engine.getMinecraftVersion().getJavaVersion().getComponent();
-				if (component != null) {
-					return OperatingSystem.getJavaPath(this.engine);
-				}
-			}
-		} else if (this.engine.getGameUpdater() != null && this.engine.getGameUpdater().getLocalVersion() != null
-				&& this.engine.getGameUpdater().getLocalVersion().getJavaVersion() != null) {
-			String component = this.engine.getGameUpdater().getLocalVersion().getJavaVersion().getComponent();
-			if (component != null) {
-				return OperatingSystem.getJavaPath(this.engine);
-			}
+		String systemJava = stripWrappingQuotes(OperatingSystem.getJavaPath());
+		if (systemJava != null && !systemJava.trim().isEmpty() && isAcceptableLaunchJava(systemJava)) {
+			Logger.log("Using system Java runtime: " + describeJavaBinary(systemJava));
+			return systemJava;
 		}
 
-		return OperatingSystem.getJavaPath();
+		if (preferredBinary != null) {
+			Logger.log("Falling back to bundled Java runtime despite validation failure: " + describeJavaBinary(preferredBinary));
+			return preferredBinary;
+		}
+
+		Logger.log("Falling back to current launcher Java runtime: " + stripWrappingQuotes(OperatingSystem.getJavaPath()));
+		return stripWrappingQuotes(OperatingSystem.getJavaPath());
 	}
 
 	private String resolvePreferredJavaComponentForLaunch() {
@@ -470,6 +468,54 @@ public class GameRunner {
 			return version.update >= 101;
 		}
 		return false;
+	}
+
+	private boolean isAcceptableLaunchJava(String javaBinary) {
+		if (javaBinary == null || javaBinary.trim().isEmpty()) {
+			return false;
+		}
+		if (requiresUpdatedJava8ForLaunch()) {
+			return isAcceptableModernForgeJava(javaBinary);
+		}
+		return true;
+	}
+
+	private boolean requiresUpdatedJava8ForLaunch() {
+		String versionId = resolveCurrentVersionId();
+		if (versionId == null || versionId.trim().isEmpty()) {
+			return false;
+		}
+		return versionId.matches("1\\.(13|14|15|16)(\\.\\d+)?");
+	}
+
+	private String resolveCurrentVersionId() {
+		if (this.engine != null && this.engine.getMinecraftVersion() != null && this.engine.getMinecraftVersion().getId() != null) {
+			return this.engine.getMinecraftVersion().getId();
+		}
+		if (this.engine != null && this.engine.getGameUpdater() != null && this.engine.getGameUpdater().getLocalVersion() != null
+				&& this.engine.getGameUpdater().getLocalVersion().getId() != null) {
+			return this.engine.getGameUpdater().getLocalVersion().getId();
+		}
+		return null;
+	}
+
+	private String describeJavaBinary(String javaBinary) {
+		JavaBinaryVersion version = readJavaBinaryVersion(javaBinary);
+		if (version == null) {
+			return javaBinary + " [version=unknown]";
+		}
+		return javaBinary + " [version=" + version.raw + "]";
+	}
+
+	private String stripWrappingQuotes(String value) {
+		if (value == null) {
+			return null;
+		}
+		String trimmed = value.trim();
+		if (trimmed.length() >= 2 && trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
+			return trimmed.substring(1, trimmed.length() - 1);
+		}
+		return trimmed;
 	}
 
 	private JavaBinaryVersion readJavaBinaryVersion(String javaBinary) {
@@ -906,6 +952,9 @@ public class GameRunner {
 	 */
 	public static List<String> hideAccessToken(String[] arguments) {
         final ArrayList<String> output = new ArrayList<String>();
+        if (arguments == null) {
+            return output;
+        }
         for (int i = 0; i < arguments.length; i++) {
             if (i > 0 && Objects.equals(arguments[i-1], "--accessToken")) {
                 output.add("????????");
@@ -915,4 +964,20 @@ public class GameRunner {
         }
         return output;
     }
+
+	public static List<String> hideAccessToken(List<String> arguments) {
+        final ArrayList<String> output = new ArrayList<String>();
+        if (arguments == null) {
+            return output;
+        }
+        for (int i = 0; i < arguments.size(); i++) {
+            if (i > 0 && Objects.equals(arguments.get(i - 1), "--accessToken")) {
+                output.add("????????");
+            } else {
+                output.add(arguments.get(i));
+            }
+        }
+        return output;
+    }
+
 }
