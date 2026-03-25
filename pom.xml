@@ -7,7 +7,7 @@
 
     <groupId>fr.trxyy.alternative</groupId>
     <artifactId>alternative-api</artifactId>
-    <version>1.5.4</version>
+    <version>1.6</version>
     <packaging>jar</packaging>
     <name>AlternativeAPI</name>
 
@@ -18,13 +18,6 @@
     </properties>
 
     <dependencies>
-
-        <!-- AlternativeAuth installé dans .m2 -->
-        <dependency>
-            <groupId>fr.trxyy.alternative</groupId>
-            <artifactId>alternative-auth</artifactId>
-            <version>1.0.4</version>
-        </dependency>
 
         <!-- JavaFX provided par le JDK -->
         <dependency>

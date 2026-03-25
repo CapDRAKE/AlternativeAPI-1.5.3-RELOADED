@@ -1,6 +1,8 @@
 <h4 align="center">A JavaFX Library for Minecraft Launchers. Works with Forge 1.13+!</h4>
 <h4 align="center">Works 100% on Windows and other OS.</h4>
 
+AlternativeAuth is now bundled directly inside AlternativeAPI, so a single JAR provides both launcher and authentication classes.
+
 ## Forge 1.13+ (deleting libraries)
 
 ```
