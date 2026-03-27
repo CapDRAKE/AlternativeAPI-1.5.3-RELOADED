@@ -1,6 +1,7 @@
 package fr.trxyy.alternative.alternative_api.minecraft.utils;
 
 public enum EnumJavaVersion {
+	JAVA_RUNTIME_DELTA("java-runtime-delta", "Java 21, run minecraft versions over 1.20.5"),
 	JAVA_RUNTIME_ALPHA("java-runtime-alpha", "Java 16, run minecraft versions over 1.16"),
 	JRE_LEGACY("jre-legacy", "Java 8, run minecraft versions under 1.16");
 	

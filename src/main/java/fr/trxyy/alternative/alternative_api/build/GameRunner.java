@@ -21,6 +21,13 @@ import java.util.*;
  */
 public class GameRunner {
 
+	private static final String[] SHARED_PROFILE_ENTRIES = new String[] {
+			"servers.dat",
+			"servers.dat_old",
+			"resourcepacks",
+			"shaderpacks"
+	};
+
 	/**
 	 * The GameEngine instance
 	 */
@@ -59,6 +66,7 @@ public class GameRunner {
 	 * @throws Exception
 	 */
     public void launch() throws Exception {
+    	syncSharedProfileData();
     	ArrayList<String> commands = this.getLaunchCommand();
         ProcessBuilder processBuilder = new ProcessBuilder(commands);
         processBuilder.redirectInput(Redirect.INHERIT);
@@ -70,6 +78,7 @@ public class GameRunner {
 		try {
 			Process process = processBuilder.start();
 			process.waitFor();
+			syncSharedProfileData();
 			int exitVal = process.exitValue();
 			if (exitVal != 0) {
 				Logger.log("\n\n");
@@ -104,15 +113,18 @@ public class GameRunner {
 		OperatingSystem os = OperatingSystem.getCurrentPlatform();
 		boolean modernForgeStyle = isModernForgeStyle();
 		boolean forgeWrapperStyle = isForgeWrapperStyle();
+		boolean managedG1GcProfile = shouldApplyManagedG1GcProfile();
 		List<String> forgeJvmArguments = Collections.emptyList();
+		String javaBinary = resolveJavaBinaryForLaunch();
 
-		commands.add(resolveJavaBinaryForLaunch());
+		commands.add(javaBinary);
 
         commands.add("-XX:-UseAdaptiveSizePolicy");
 
 		if (engine.getJVMArguments() != null) {
 			commands.addAll(engine.getJVMArguments().getJVMArguments());
 		}
+		commands.addAll(getVersionJvmArguments());
 
 		if (modernForgeStyle) {
 			forgeJvmArguments = this.getForgeJVMArguments();
@@ -125,37 +137,21 @@ public class GameRunner {
 			commands.add("-Xdock:name=Minecraft");
 			commands.add("-Xdock:icon=" + engine.getGameFolder().getAssetsDir() + "icons/minecraft.icns");
 		} else if (os.equals(OperatingSystem.WINDOWS)) {
-			if (!(this.engine.getMinecraftVersion().getJavaVersion() != null)) {
+			if (!shouldSkipLegacyCmsGc() && !managedG1GcProfile) {
 				commands.add("-XX:+UseConcMarkSweepGC");
 			}
 			commands.add("-XX:HeapDumpPath=MojangTricksIntelDriversForPerformance_javaw.exe_minecraft.exe.heapdump");
 		}
 
-		if (this.engine.isOnline()) {
-			if (this.engine.getMinecraftVersion().getJavaVersion() != null) {
-				commands.add("-XX:+UnlockExperimentalVMOptions");
-				commands.add("-XX:+UseG1GC");
-				commands.add("-XX:G1NewSizePercent=20");
-				commands.add("-XX:G1ReservePercent=20");
-				commands.add("-XX:MaxGCPauseMillis=50");
-				commands.add("-XX:G1HeapRegionSize=32M");
-			}
-		} else {
-			if (this.engine.getGameUpdater().getLocalVersion().getJavaVersion() != null) {
-				commands.add("-XX:+UnlockExperimentalVMOptions");
-				commands.add("-XX:+UseG1GC");
-				commands.add("-XX:G1NewSizePercent=20");
-				commands.add("-XX:G1ReservePercent=20");
-				commands.add("-XX:MaxGCPauseMillis=50");
-				commands.add("-XX:G1HeapRegionSize=32M");
-			}
+		if (managedG1GcProfile) {
+			addManagedG1GcArguments(commands);
 		}
 
 		if (shouldInjectMinecraftLoggingConfiguration()) {
 			File log4jFile = new File(this.engine.getGameFolder().getLogConfigsDir(), this.engine.getMinecraftVersion().getLogging().getClient().getFile().getId());
 			commands.add(this.engine.getMinecraftVersion().getLogging().getClient().getArgument().replace("${path}", log4jFile.getAbsolutePath()));
 		}
-		String nativesPath = engine.getGameFolder().getNativesDir().getAbsolutePath();
+		String nativesPath = resolveRuntimeNativesDirectory().getAbsolutePath();
 		commands.add("-Djava.library.path=" + nativesPath);
 		commands.add("-Dorg.lwjgl.librarypath=" + nativesPath);
 		commands.add("-Dfml.ignoreInvalidMinecraftCertificates=true");
@@ -244,6 +240,9 @@ public class GameRunner {
 	    commands.removeIf(arg -> arg.startsWith("--quickPlay"));
 	    /** ----- Suppression des arguments vides ----- */
 	    commands.removeIf(arg -> arg.trim().isEmpty());
+	    pruneMissingValueOption(commands, "--clientId");
+	    pruneMissingValueOption(commands, "--xuid");
+	    pruneConflictingCollectorOptions(commands);
 
 	    Logger.log("Commande de lancement complète : " + String.join(" ", commands));
 	    return commands;
@@ -259,7 +258,34 @@ public class GameRunner {
 		if (engine == null || engine.getGameStyle() == null) {
 			return GameStyle.VANILLA.getMainClass();
 		}
+		if (shouldPreferVersionMainClass()) {
+			String mainClass = resolveMainClassFromVersionMetadata();
+			if (mainClass != null && !mainClass.trim().isEmpty()) {
+				return mainClass;
+			}
+		}
 		return ForgeLaunchResolver.resolveMainClass(engine);
+	}
+
+	private boolean shouldPreferVersionMainClass() {
+		return engine.getGameStyle().equals(GameStyle.FABRIC)
+				|| engine.getGameStyle().equals(GameStyle.QUILT)
+				|| engine.getGameStyle().equals(GameStyle.NEOFORGE);
+	}
+
+	private boolean shouldUseVersionJvmArguments() {
+		return engine.getGameStyle().equals(GameStyle.NEOFORGE);
+	}
+
+	private String resolveMainClassFromVersionMetadata() {
+		if (engine != null && engine.getMinecraftVersion() != null && engine.getMinecraftVersion().getMainClass() != null) {
+			return engine.getMinecraftVersion().getMainClass();
+		}
+		if (engine != null && engine.getGameUpdater() != null && engine.getGameUpdater().getLocalVersion() != null
+				&& engine.getGameUpdater().getLocalVersion().getMainClass() != null) {
+			return engine.getGameUpdater().getLocalVersion().getMainClass();
+		}
+		return null;
 	}
 
 	private String resolveJavaBinaryForLaunch() {
@@ -300,7 +326,10 @@ public class GameRunner {
 	}
 
 	private String resolvePreferredJavaComponentForLaunch() {
-		if (shouldUseAlphaRuntimeForLegacyBootstrapForge()) {
+		if (shouldUseDeltaRuntimeForNeoForge()) {
+			return EnumJavaVersion.JAVA_RUNTIME_DELTA.getCode();
+		}
+		if (shouldUseAlphaRuntimeForModernModloader()) {
 			return EnumJavaVersion.JAVA_RUNTIME_ALPHA.getCode();
 		}
 
@@ -327,11 +356,102 @@ public class GameRunner {
 				&& isLegacyBootstrapForgeStyle();
 	}
 
+	private boolean shouldUseAlphaRuntimeForModernModloader() {
+		return shouldUseAlphaRuntimeForLegacyBootstrapForge();
+	}
+
+	private boolean shouldUseDeltaRuntimeForNeoForge() {
+		return engine != null
+				&& engine.getGameStyle() != null
+				&& engine.getGameStyle().equals(GameStyle.NEOFORGE)
+				&& resolveConfiguredJavaMajorVersion() >= 21;
+	}
+
 	private boolean shouldUseLegacyRuntimeForForge113To116() {
 		return engine != null
 				&& engine.getGameStyle() != null
 				&& engine.getGameStyle().equals(GameStyle.FORGE_1_13_HIGHER)
 				&& !isLegacyBootstrapForgeStyle();
+	}
+
+	private boolean shouldSkipLegacyCmsGc() {
+		if (isModernForgeStyle()) {
+			return true;
+		}
+		if (requiresJava21ForLaunch()) {
+			return true;
+		}
+
+		String preferredComponent = resolvePreferredJavaComponentForLaunch();
+		return EnumJavaVersion.JAVA_RUNTIME_ALPHA.getCode().equals(preferredComponent)
+				|| EnumJavaVersion.JAVA_RUNTIME_DELTA.getCode().equals(preferredComponent);
+	}
+
+	private boolean shouldApplyManagedG1GcProfile() {
+		if (this.engine == null) {
+			return false;
+		}
+		if (this.engine.isOnline()) {
+			return this.engine.getMinecraftVersion() != null
+					&& this.engine.getMinecraftVersion().getJavaVersion() != null;
+		}
+		return this.engine.getGameUpdater() != null
+				&& this.engine.getGameUpdater().getLocalVersion() != null
+				&& this.engine.getGameUpdater().getLocalVersion().getJavaVersion() != null;
+	}
+
+	private void addManagedG1GcArguments(List<String> commands) {
+		if (commands == null) {
+			return;
+		}
+		commands.add("-XX:+UnlockExperimentalVMOptions");
+		commands.add("-XX:+UseG1GC");
+		commands.add("-XX:G1NewSizePercent=20");
+		commands.add("-XX:G1ReservePercent=20");
+		commands.add("-XX:MaxGCPauseMillis=50");
+		commands.add("-XX:G1HeapRegionSize=32M");
+	}
+
+	private void pruneConflictingCollectorOptions(List<String> commands) {
+		if (commands == null || commands.isEmpty()) {
+			return;
+		}
+
+		List<String> collectorFlags = Arrays.asList(
+				"-XX:+UseConcMarkSweepGC",
+				"-XX:+UseG1GC",
+				"-XX:+UseParallelGC",
+				"-XX:+UseParallelOldGC",
+				"-XX:+UseSerialGC",
+				"-XX:+UseZGC",
+				"-XX:+UseShenandoahGC",
+				"-XX:+UseEpsilonGC");
+
+		String preferredCollector = null;
+		for (String command : commands) {
+			if (collectorFlags.contains(command)) {
+				preferredCollector = command;
+			}
+		}
+
+		if (preferredCollector == null) {
+			return;
+		}
+
+		boolean keptPreferredCollector = false;
+		for (int i = 0; i < commands.size(); i++) {
+			String command = commands.get(i);
+			if (!collectorFlags.contains(command)) {
+				continue;
+			}
+			if (!preferredCollector.equals(command) || keptPreferredCollector) {
+				Logger.log("Removing conflicting GC option: " + command);
+				commands.remove(i);
+				i--;
+				continue;
+			}
+			keptPreferredCollector = true;
+		}
 	}
 
 	private String findJavaBinaryInComponent(String component) {
@@ -456,10 +576,69 @@ public class GameRunner {
 		return group + ":" + artifact;
 	}
 
+	private List<String> getVersionJvmArguments() {
+		if (!shouldUseVersionJvmArguments()
+				|| this.engine == null
+				|| this.engine.getMinecraftVersion() == null
+				|| this.engine.getMinecraftVersion().getArguments() == null
+				|| this.engine.getMinecraftVersion().getArguments().get(ArgumentType.JVM) == null) {
+			return Collections.emptyList();
+		}
+
+		List<String> jvmArgs = new ArrayList<String>();
+		for (Argument argument : this.engine.getMinecraftVersion().getArguments().get(ArgumentType.JVM)) {
+			if (argument == null || !argument.appliesToCurrentEnvironment() || argument.getValues() == null) {
+				continue;
+			}
+			for (String rawValue : argument.getValues()) {
+				String resolved = resolveVersionJvmArgument(rawValue);
+				if (shouldSkipManagedVersionJvmArgument(rawValue, resolved)) {
+					continue;
+				}
+				jvmArgs.add(resolved);
+			}
+		}
+		return jvmArgs;
+	}
+
+	private String resolveVersionJvmArgument(String value) {
+		if (value == null) {
+			return "";
+		}
+		String resolved = value
+				.replace("${library_directory}", this.engine.getGameFolder().getLibsDir().getAbsolutePath())
+				.replace("${classpath_separator}", System.getProperty("path.separator"))
+				.replace("${natives_directory}", this.resolveRuntimeNativesDirectory().getAbsolutePath())
+				.replace("${launcher_name}", this.engine.getLauncherPreferences() != null ? safe(this.engine.getLauncherPreferences().getName()) : "")
+				.replace("${launcher_version}", "1.0");
+		resolved = replaceLaunchPlaceholders(resolved);
+		if (resolved.startsWith("-DignoreList=")) {
+			resolved = "-DignoreList=" + expandIgnoreList(resolved.substring("-DignoreList=".length()));
+		}
+		return resolved;
+	}
+
+	private boolean shouldSkipManagedVersionJvmArgument(String rawValue, String resolvedValue) {
+		if (resolvedValue == null || resolvedValue.trim().isEmpty()) {
+			return true;
+		}
+		if ("-cp".equals(rawValue) || "${classpath}".equals(rawValue)) {
+			return true;
+		}
+		return resolvedValue.startsWith("-Djava.library.path=")
+				|| resolvedValue.startsWith("-Djna.tmpdir=")
+				|| resolvedValue.startsWith("-Dorg.lwjgl.system.SharedLibraryExtractPath=")
+				|| resolvedValue.startsWith("-Dio.netty.native.workdir=")
+				|| resolvedValue.startsWith("-XX:HeapDumpPath=");
+	}
+
 	private boolean isAcceptableModernForgeJava(String javaBinary) {
 		JavaBinaryVersion version = readJavaBinaryVersion(javaBinary);
 		if (version == null) {
 			return false;
+		}
+		if (requiresJava21ForLaunch()) {
+			return version.major >= 21;
 		}
 		if (version.major >= 9) {
 			return true;
@@ -474,6 +653,14 @@ public class GameRunner {
 		if (javaBinary == null || javaBinary.trim().isEmpty()) {
 			return false;
 		}
+		JavaBinaryVersion version = readJavaBinaryVersion(javaBinary);
+		if (version == null) {
+			return false;
+		}
+		int requiredMajor = resolveConfiguredJavaMajorVersion();
+		if (requiredMajor > 0) {
+			return version.major >= requiredMajor;
+		}
 		if (requiresUpdatedJava8ForLaunch()) {
 			return isAcceptableModernForgeJava(javaBinary);
 		}
@@ -481,11 +668,60 @@ public class GameRunner {
 	}
 
 	private boolean requiresUpdatedJava8ForLaunch() {
-		String versionId = resolveCurrentVersionId();
+		if (requiresJava21ForLaunch()) {
+			return true;
+		}
+		String versionId = resolveBaseMinecraftVersionId();
 		if (versionId == null || versionId.trim().isEmpty()) {
 			return false;
 		}
 		return versionId.matches("1\\.(13|14|15|16)(\\.\\d+)?");
+	}
+
+	private boolean requiresJava21ForLaunch() {
+		return resolveConfiguredJavaMajorVersion() >= 21;
+	}
+
+	private int resolveConfiguredJavaMajorVersion() {
+		if (this.engine != null && this.engine.getMinecraftVersion() != null
+				&& this.engine.getMinecraftVersion().getJavaVersion() != null
+				&& this.engine.getMinecraftVersion().getJavaVersion().getMajorVersion() > 0) {
+			return this.engine.getMinecraftVersion().getJavaVersion().getMajorVersion();
+		}
+		if (this.engine != null && this.engine.getGameUpdater() != null
+				&& this.engine.getGameUpdater().getLocalVersion() != null
+				&& this.engine.getGameUpdater().getLocalVersion().getJavaVersion() != null
+				&& this.engine.getGameUpdater().getLocalVersion().getJavaVersion().getMajorVersion() > 0) {
+			return this.engine.getGameUpdater().getLocalVersion().getJavaVersion().getMajorVersion();
+		}
+
+		String baseVersion = resolveBaseMinecraftVersionId();
+		if (isMinecraftVersionAtLeast(baseVersion, 1, 21)) {
+			return 21;
+		}
+		return 0;
+	}
+
+	private boolean isMinecraftVersionAtLeast(String versionId, int major, int minor) {
+		if (versionId == null || versionId.trim().isEmpty()) {
+			return false;
+		}
+
+		String[] parts = versionId.trim().split("\\.");
+		if (parts.length < 2) {
+			return false;
+		}
+
+		try {
+			int currentMajor = Integer.parseInt(parts[0]);
+			int currentMinor = Integer.parseInt(parts[1]);
+			if (currentMajor != major) {
+				return currentMajor > major;
+			}
+			return currentMinor >= minor;
+		} catch (NumberFormatException ignored) {
+			return false;
+		}
 	}
 
 	private String resolveCurrentVersionId() {
@@ -497,6 +733,237 @@ public class GameRunner {
 			return this.engine.getGameUpdater().getLocalVersion().getId();
 		}
 		return null;
+	}
+
+	private String resolveBaseMinecraftVersionId() {
+		String inheritedVersion = resolveInheritedMinecraftVersionId();
+		if (inheritedVersion != null && !inheritedVersion.trim().isEmpty()) {
+			return inheritedVersion;
+		}
+
+		String currentVersion = resolveCurrentVersionId();
+		String extractedVersion = extractMinecraftVersionToken(currentVersion);
+		if (extractedVersion != null && !extractedVersion.trim().isEmpty()) {
+			return extractedVersion;
+		}
+
+		return currentVersion;
+	}
+
+	private File resolveRuntimeGameDirectory() {
+		File basePlayDir = this.engine != null && this.engine.getGameFolder() != null
+				? this.engine.getGameFolder().getPlayDir()
+				: null;
+		if (basePlayDir == null) {
+			return new File(".");
+		}
+
+		File runtimeDir = new File(basePlayDir, resolveRuntimeProfileDirectoryName());
+		runtimeDir.mkdirs();
+		return runtimeDir;
+	}
+
+	private File resolveSharedProfileDirectory() {
+		File basePlayDir = this.engine != null && this.engine.getGameFolder() != null
+				? this.engine.getGameFolder().getPlayDir()
+				: null;
+		if (basePlayDir == null) {
+			return new File(".");
+		}
+
+		File sharedDir = new File(basePlayDir, "_shared-userdata");
+		sharedDir.mkdirs();
+		return sharedDir;
+	}
+
+	private File resolveRuntimeNativesDirectory() {
+		File baseNativesDir = this.engine != null && this.engine.getGameFolder() != null
+				? this.engine.getGameFolder().getNativesDir()
+				: null;
+		if (baseNativesDir == null) {
+			return new File(".");
+		}
+
+		File runtimeDir = new File(baseNativesDir, resolveRuntimeProfileDirectoryName());
+		runtimeDir.mkdirs();
+		return runtimeDir;
+	}
+
+	private String resolveRuntimeProfileDirectoryName() {
+		String styleName = this.engine != null && this.engine.getGameStyle() != null
+				? this.engine.getGameStyle().name().toLowerCase(Locale.ROOT)
+				: "unknown";
+		String versionId = resolveCurrentVersionId();
+		if (versionId == null || versionId.trim().isEmpty()) {
+			versionId = resolveBaseMinecraftVersionId();
+		}
+		if (versionId == null || versionId.trim().isEmpty()) {
+			versionId = "default";
+		}
+		return sanitizePathSegment(styleName + "-" + versionId);
+	}
+
+	private String sanitizePathSegment(String rawValue) {
+		if (rawValue == null || rawValue.trim().isEmpty()) {
+			return "default";
+		}
+
+		String sanitized = rawValue.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
+		while (sanitized.contains("..")) {
+			sanitized = sanitized.replace("..", ".");
+		}
+		return sanitized.isEmpty() ? "default" : sanitized;
+	}
+
+	private void syncSharedProfileData() {
+		try {
+			File runtimeDir = resolveRuntimeGameDirectory();
+			File sharedDir = resolveSharedProfileDirectory();
+			if (runtimeDir == null || sharedDir == null) {
+				return;
+			}
+
+			for (String entry : SHARED_PROFILE_ENTRIES) {
+				mergeSharedPath(new File(sharedDir, entry), new File(runtimeDir, entry));
+			}
+		} catch (IOException e) {
+			Logger.log("Couldn't sync shared profile data!");
+			e.printStackTrace();
+		}
+	}
+
+	private void mergeSharedPath(File sharedPath, File runtimePath) throws IOException {
+		boolean sharedExists = sharedPath.exists();
+		boolean runtimeExists = runtimePath.exists();
+
+		if (!sharedExists && !runtimeExists) {
+			return;
+		}
+		if (!sharedExists) {
+			copyPath(runtimePath, sharedPath);
+			return;
+		}
+		if (!runtimeExists) {
+			copyPath(sharedPath, runtimePath);
+			return;
+		}
+
+		if (sharedPath.isDirectory() || runtimePath.isDirectory()) {
+			if (!sharedPath.isDirectory() || !runtimePath.isDirectory()) {
+				File preferred = sharedPath.lastModified() >= runtimePath.lastModified() ? sharedPath : runtimePath;
+				File target = preferred == sharedPath ? runtimePath : sharedPath;
+				replacePath(preferred, target);
+				return;
+			}
+			mergeDirectories(sharedPath, runtimePath);
+			return;
+		}
+
+		if (sharedPath.lastModified() > runtimePath.lastModified()) {
+			copyFile(sharedPath, runtimePath);
+		} else if (runtimePath.lastModified() > sharedPath.lastModified()) {
+			copyFile(runtimePath, sharedPath);
+		}
+	}
+
+	private void mergeDirectories(File sharedDir, File runtimeDir) throws IOException {
+		sharedDir.mkdirs();
+		runtimeDir.mkdirs();
+
+		Set<String> children = new LinkedHashSet<String>();
+		File[] sharedChildren = sharedDir.listFiles();
+		File[] runtimeChildren = runtimeDir.listFiles();
+		if (sharedChildren != null) {
+			for (File child : sharedChildren) {
+				children.add(child.getName());
+			}
+		}
+		if (runtimeChildren != null) {
+			for (File child : runtimeChildren) {
+				children.add(child.getName());
+			}
+		}
+
+		for (String childName : children) {
+			mergeSharedPath(new File(sharedDir, childName), new File(runtimeDir, childName));
+		}
+	}
+
+	private void replacePath(File source, File target) throws IOException {
+		deleteRecursively(target);
+		copyPath(source, target);
+	}
+
+	private void copyPath(File source, File target) throws IOException {
+		if (source == null || !source.exists()) {
+			return;
+		}
+		if (source.isDirectory()) {
+			target.mkdirs();
+			File[] children = source.listFiles();
+			if (children != null) {
+				for (File child : children) {
+					copyPath(child, new File(target, child.getName()));
+				}
+			}
+			return;
+		}
+		copyFile(source, target);
+	}
+
+	private void copyFile(File source, File target) throws IOException {
+		File parent = target.getParentFile();
+		if (parent != null) {
+			parent.mkdirs();
+		}
+		java.nio.file.Files.copy(source.toPath(), target.toPath(),
+				java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+				java.nio.file.StandardCopyOption.COPY_ATTRIBUTES);
+	}
+
+	private void deleteRecursively(File file) throws IOException {
+		if (file == null || !file.exists()) {
+			return;
+		}
+		if (file.isDirectory()) {
+			File[] children = file.listFiles();
+			if (children != null) {
+				for (File child : children) {
+					deleteRecursively(child);
+				}
+			}
+		}
+		if (!file.delete() && file.exists()) {
+			throw new IOException("Unable to delete " + file.getAbsolutePath());
+		}
+	}
+
+	private String resolveInheritedMinecraftVersionId() {
+		if (this.engine != null && this.engine.getMinecraftVersion() != null
+				&& this.engine.getMinecraftVersion().getInheritsFrom() != null
+				&& !this.engine.getMinecraftVersion().getInheritsFrom().trim().isEmpty()) {
+			return this.engine.getMinecraftVersion().getInheritsFrom().trim();
+		}
+		if (this.engine != null && this.engine.getGameUpdater() != null
+				&& this.engine.getGameUpdater().getLocalVersion() != null
+				&& this.engine.getGameUpdater().getLocalVersion().getInheritsFrom() != null
+				&& !this.engine.getGameUpdater().getLocalVersion().getInheritsFrom().trim().isEmpty()) {
+			return this.engine.getGameUpdater().getLocalVersion().getInheritsFrom().trim();
+		}
+		return null;
+	}
+
+	private String extractMinecraftVersionToken(String rawValue) {
+		if (rawValue == null || rawValue.trim().isEmpty()) {
+			return null;
+		}
+
+		java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(1\\.\\d+(?:\\.\\d+)?)").matcher(rawValue);
+		String lastMatch = null;
+		while (matcher.find()) {
+			lastMatch = matcher.group(1);
+		}
+		return lastMatch;
 	}
 
 	private String describeJavaBinary(String javaBinary) {
@@ -687,12 +1154,24 @@ public class GameRunner {
 			return classpath;
 		}
 
+		Set<String> expectedFileNames = new java.util.HashSet<String>();
 		String versionId = engine.getMinecraftVersion().getId();
-		if (versionId == null || versionId.trim().isEmpty()) {
+		if (versionId != null && !versionId.trim().isEmpty()) {
+			expectedFileNames.add(versionId + ".jar");
+		}
+		if (engine.getGameUpdater() != null) {
+			File clientJar = engine.getGameUpdater().getClientJarFile();
+			if (clientJar != null) {
+				String clientJarName = clientJar.getName();
+				if (clientJarName != null && !clientJarName.trim().isEmpty()) {
+					expectedFileNames.add(clientJarName);
+				}
+			}
+		}
+		if (expectedFileNames.isEmpty()) {
 			return classpath;
 		}
 
-		String expectedFileName = versionId + ".jar";
 		String separatorRegex = java.util.regex.Pattern.quote(File.pathSeparator);
 		String[] classpathEntries = classpath.split(separatorRegex);
 		List<String> filtered = new ArrayList<String>();
@@ -704,7 +1183,7 @@ public class GameRunner {
 			}
 
 			String fileName = new File(trimmed).getName();
-			if (expectedFileName.equalsIgnoreCase(fileName)) {
+			if (matchesLegacyMinecraftJar(fileName, expectedFileNames)) {
 				Logger.log("Skipping legacy Forge duplicated Minecraft version jar from classpath: " + trimmed);
 				continue;
 			}
@@ -713,6 +1192,20 @@ public class GameRunner {
 		}
 
 		return String.join(File.pathSeparator, filtered);
+	}
+
+	private boolean matchesLegacyMinecraftJar(String fileName, Set<String> expectedFileNames) {
+		if (fileName == null || expectedFileNames == null || expectedFileNames.isEmpty()) {
+			return false;
+		}
+
+		for (String expected : expectedFileNames) {
+			if (expected != null && expected.equalsIgnoreCase(fileName)) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private String filterForgeWrapperClasspath(String classpath) {
@@ -822,7 +1315,7 @@ public class GameRunner {
 		values.put("auth_access_token", this.session != null ? safe(this.session.getToken()) : "");
 		values.put("version_name", this.engine != null && this.engine.getMinecraftVersion() != null ? safe(this.engine.getMinecraftVersion().getId()) : "");
 		values.put("version_type", "release");
-		values.put("game_directory", this.engine != null ? safe(this.engine.getGameFolder().getPlayDir().getAbsolutePath()) : "");
+		values.put("game_directory", this.engine != null ? safe(resolveRuntimeGameDirectory().getAbsolutePath()) : "");
 		values.put("assets_root", this.engine != null ? safe(this.engine.getGameFolder().getAssetsDir().getAbsolutePath()) : "");
 		values.put("assets_index_name", this.engine != null && this.engine.getMinecraftVersion() != null ? safe(this.engine.getMinecraftVersion().getAssets()) : "");
 		values.put("user_type", "legacy");
@@ -830,20 +1323,32 @@ public class GameRunner {
 
 		String reflectedClientId = invokeSessionStringGetter("getClientId");
 		String reflectedXuid = invokeSessionStringGetter("getXuid");
-		if (!reflectedClientId.isEmpty()) {
-			values.put("clientid", reflectedClientId);
-			values.put("client_id", reflectedClientId);
-		}
-		if (!reflectedXuid.isEmpty()) {
-			values.put("auth_xuid", reflectedXuid);
-			values.put("xuid", reflectedXuid);
-		}
+		values.put("clientid", reflectedClientId);
+		values.put("client_id", reflectedClientId);
+		values.put("auth_xuid", reflectedXuid);
+		values.put("xuid", reflectedXuid);
 
 		String resolved = value;
 		for (Map.Entry<String, String> entry : values.entrySet()) {
 			resolved = resolved.replace("${" + entry.getKey() + "}", safe(entry.getValue()));
 		}
 		return resolved;
+	}
+
+	private void pruneMissingValueOption(List<String> commands, String optionName) {
+		if (commands == null || optionName == null || optionName.trim().isEmpty()) {
+			return;
+		}
+		for (int i = 0; i < commands.size(); i++) {
+			String current = commands.get(i);
+			if (!optionName.equals(current)) {
+				continue;
+			}
+			if (i + 1 >= commands.size() || commands.get(i + 1).startsWith("--")) {
+				commands.remove(i);
+				i--;
+			}
+		}
 	}
 
 	private String invokeSessionStringGetter(String methodName) {
@@ -878,13 +1383,13 @@ public class GameRunner {
 		map.put("user_type", "legacy");
 		map.put("version_name", this.engine.getMinecraftVersion().getId());
 		map.put("version_type", "release");
-		map.put("game_directory", this.engine.getGameFolder().getPlayDir().getAbsolutePath());
+		map.put("game_directory", this.resolveRuntimeGameDirectory().getAbsolutePath());
 		map.put("assets_root", this.engine.getGameFolder().getAssetsDir().getAbsolutePath());
 		map.put("assets_index_name", this.engine.getMinecraftVersion().getAssets());
 		map.put("user_properties", "{}");
 
 		for (int i = 0; i < split.length; i++)
-			split[i] = substitutor.replace(split[i]);
+			split[i] = replaceLaunchPlaceholders(substitutor.replace(split[i]));
 
 		return split;
 	}
@@ -908,13 +1413,13 @@ public class GameRunner {
 		map.put("user_type", "legacy");
 		map.put("version_name", this.engine.getMinecraftVersion().getId());
 		map.put("version_type", "release");
-		map.put("game_directory", this.engine.getGameFolder().getPlayDir().getAbsolutePath());
+		map.put("game_directory", this.resolveRuntimeGameDirectory().getAbsolutePath());
 		map.put("assets_root", this.engine.getGameFolder().getAssetsDir().getAbsolutePath());
 		map.put("assets_index_name", this.engine.getMinecraftVersion().getAssets());
 		map.put("user_properties", "{}");
 
 		for (int i = 0; i < split.length; i++)
-			split[i] = substitutor.replace(split[i]);
+			split[i] = replaceLaunchPlaceholders(substitutor.replace(split[i]));
 
 		return split;
 	}
@@ -924,7 +1429,7 @@ public class GameRunner {
 	 */
 	private void unpackNatives() {
 		try {
-			FileUtil.unpackNatives(engine.getGameFolder().getNativesDir(), engine);
+			FileUtil.unpackNatives(resolveRuntimeNativesDirectory(), engine);
 		} catch (IOException e) {
 			Logger.log("Couldn't unpack natives!");
 			e.printStackTrace();
@@ -937,7 +1442,7 @@ public class GameRunner {
 	 */
 	private void deleteFakeNatives() {
 		try {
-			FileUtil.deleteFakeNatives(engine.getGameFolder().getNativesDir(), engine);
+			FileUtil.deleteFakeNatives(resolveRuntimeNativesDirectory(), engine);
 		} catch (IOException e) {
 			Logger.log("Couldn't delete natives!");
 			e.printStackTrace();

@@ -105,7 +105,7 @@ public class GameUtils {
         }
 
         File clientJar = engine.getGameUpdater().getClientJarFile();
-        if (clientJar != null) {
+        if (clientJar != null && clientJar.exists()) {
             classpathEntries.add(normalizeFile(clientJar));
         }
 
@@ -120,7 +120,8 @@ public class GameUtils {
         GameStyle style = engine.getGameStyle();
         return style.equals(GameStyle.FORGE_1_13_HIGHER)
                 || style.equals(GameStyle.FORGE_1_17_HIGHER)
-                || style.equals(GameStyle.FORGE_1_19_HIGHER);
+                || style.equals(GameStyle.FORGE_1_19_HIGHER)
+                || style.equals(GameStyle.NEOFORGE);
     }
 
     /**

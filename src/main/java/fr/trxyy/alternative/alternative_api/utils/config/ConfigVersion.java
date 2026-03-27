@@ -48,6 +48,18 @@ public class ConfigVersion {
 	  /* Using Forge ?
 		  */
 		  public boolean useforge;
+	  /*
+	   * Using Fabric ?
+	   */
+	  public boolean useFabric;
+	  /*
+	   * Using Quilt ?
+	   */
+	  public boolean useQuilt;
+	  /*
+	   * Using NeoForge ?
+	   */
+	  public boolean useNeoForge;
 		  /*
 		   * 
 		   */
@@ -100,6 +112,9 @@ public boolean useMicrosoft;
 		this.version = o.version;
 		this.useOptifine = o.useOptifine;
 		this.useforge = o.useforge;
+		this.useFabric = o.useFabric;
+		this.useQuilt = o.useQuilt;
+		this.useNeoForge = o.useNeoForge;
 		this.usediscord = o.usediscord;
 		this.usemusic = o.usemusic;
 		this.gamesize = o.gamesize;
@@ -190,6 +205,21 @@ public boolean useMicrosoft;
 	public boolean useForge() 
 	{
 		return this.useforge;
+	}
+
+	public boolean useFabric()
+	{
+		return this.useFabric;
+	}
+
+	public boolean useQuilt()
+	{
+		return this.useQuilt;
+	}
+
+	public boolean useNeoForge()
+	{
+		return this.useNeoForge;
 	}
 	
 	public boolean useDiscord() {

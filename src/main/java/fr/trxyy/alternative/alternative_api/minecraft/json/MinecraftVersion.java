@@ -1,6 +1,7 @@
 package fr.trxyy.alternative.alternative_api.minecraft.json;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -206,5 +207,96 @@ public class MinecraftVersion {
 	 */
 	public Map<ArgumentType, List<Argument>> getArguments() {
 		return this.arguments;
+	}
+
+	public static MinecraftVersion mergeInherited(MinecraftVersion parent, MinecraftVersion child) {
+		if (parent == null) {
+			return child;
+		}
+		if (child == null) {
+			return parent;
+		}
+
+		MinecraftVersion merged = new MinecraftVersion();
+		merged.id = child.id != null ? child.id : parent.id;
+		merged.inheritsFrom = child.inheritsFrom;
+		merged.minecraftArguments = child.minecraftArguments != null ? child.minecraftArguments : parent.minecraftArguments;
+		merged.libraries = mergeLibraries(parent.libraries, child.libraries);
+		merged.mainClass = child.mainClass != null ? child.mainClass : parent.mainClass;
+		merged.assets = child.assets != null ? child.assets : parent.assets;
+		merged.assetIndex = child.assetIndex != null ? child.assetIndex : parent.assetIndex;
+		merged.downloads = child.downloads != null ? child.downloads : parent.downloads;
+		merged.arguments = mergeArguments(parent.arguments, child.arguments);
+		merged.javaVersion = child.javaVersion != null ? child.javaVersion : parent.javaVersion;
+		merged.logging = child.logging != null ? child.logging : parent.logging;
+		return merged;
+	}
+
+	private static List<MinecraftLibrary> mergeLibraries(List<MinecraftLibrary> parentLibraries, List<MinecraftLibrary> childLibraries) {
+		LinkedHashMap<String, MinecraftLibrary> mergedLibraries = new LinkedHashMap<String, MinecraftLibrary>();
+
+		if (parentLibraries != null) {
+			for (MinecraftLibrary library : parentLibraries) {
+				if (library == null) {
+					continue;
+				}
+				mergedLibraries.put(resolveLibraryKey(library), new MinecraftLibrary(library));
+			}
+		}
+
+		if (childLibraries != null) {
+			for (MinecraftLibrary library : childLibraries) {
+				if (library == null) {
+					continue;
+				}
+				mergedLibraries.put(resolveLibraryKey(library), new MinecraftLibrary(library));
+			}
+		}
+
+		return new ArrayList<MinecraftLibrary>(mergedLibraries.values());
+	}
+
+	private static Map<ArgumentType, List<Argument>> mergeArguments(Map<ArgumentType, List<Argument>> parentArguments,
+			Map<ArgumentType, List<Argument>> childArguments) {
+		if (parentArguments == null && childArguments == null) {
+			return null;
+		}
+
+		Map<ArgumentType, List<Argument>> mergedArguments = Maps.newEnumMap(ArgumentType.class);
+		appendArguments(mergedArguments, parentArguments);
+		appendArguments(mergedArguments, childArguments);
+		return mergedArguments;
+	}
+
+	private static void appendArguments(Map<ArgumentType, List<Argument>> target, Map<ArgumentType, List<Argument>> source) {
+		if (target == null || source == null) {
+			return;
+		}
+
+		for (Map.Entry<ArgumentType, List<Argument>> entry : source.entrySet()) {
+			if (entry == null || entry.getKey() == null || entry.getValue() == null) {
+				continue;
+			}
+			List<Argument> current = target.get(entry.getKey());
+			if (current == null) {
+				current = new ArrayList<Argument>();
+				target.put(entry.getKey(), current);
+			}
+			current.addAll(new ArrayList<Argument>(entry.getValue()));
+		}
+	}
+
+	private static String resolveLibraryKey(MinecraftLibrary library) {
+		if (library == null) {
+			return "null-library";
+		}
+		if (library.getName() != null && !library.getName().trim().isEmpty()) {
+			return library.getName();
+		}
+		String artifactPath = library.getArtifactPath();
+		if (artifactPath != null && !artifactPath.trim().isEmpty()) {
+			return artifactPath;
+		}
+		return String.valueOf(System.identityHashCode(library));
 	}
 }

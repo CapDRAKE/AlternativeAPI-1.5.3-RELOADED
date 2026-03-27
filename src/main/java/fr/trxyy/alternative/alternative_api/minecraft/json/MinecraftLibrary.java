@@ -317,6 +317,10 @@ public class MinecraftLibrary {
         this.downloads = downloads;
     }
 
+    public String getUrl() {
+        return this.url;
+    }
+
     public String toString() {
         return "Library{name='" + this.name + '\'' + ", rules=" + this.rules + ", natives=" + this.natives
                 + ", extract=" + this.extract + '}';

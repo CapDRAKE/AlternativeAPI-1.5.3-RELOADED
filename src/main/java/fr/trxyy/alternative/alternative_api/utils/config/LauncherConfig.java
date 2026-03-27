@@ -64,6 +64,9 @@ public class LauncherConfig {
 			configDetails.put(EnumConfig.REMEMBER_ME.getOption(), false);
 			configDetails.put(EnumConfig.VERSION.getOption(), EnumConfig.VERSION.getDefault());
 			configDetails.put(EnumConfig.USE_FORGE.getOption(), false);
+			configDetails.put(EnumConfig.USE_FABRIC.getOption(), false);
+			configDetails.put(EnumConfig.USE_QUILT.getOption(), false);
+			configDetails.put(EnumConfig.USE_NEOFORGE.getOption(), false);
 			configDetails.put(EnumConfig.USE_OPTIFINE.getOption(), true);
 			configDetails.put(EnumConfig.USE_PREMIUM.getOption(), false);
 			configDetails.put(EnumConfig.PASSWORD.getOption(), EnumConfig.PASSWORD.getDefault());

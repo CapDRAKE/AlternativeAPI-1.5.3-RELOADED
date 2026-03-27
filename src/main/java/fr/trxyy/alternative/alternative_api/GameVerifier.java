@@ -141,7 +141,12 @@ public class GameVerifier {
 
 		String insideGame = path.substring(playPrefix.length());
 		String lower = insideGame.toLowerCase();
+		String nestedLower = stripFirstGameProfileSegment(insideGame).toLowerCase();
 
+		return isProtectedGameContent(lower) || isProtectedGameContent(nestedLower);
+	}
+
+	private boolean isProtectedGameContent(String lower) {
 		if (lower.equals("servers.dat") || lower.equals("servers.dat_old")
 				|| lower.equals("options.txt") || lower.equals("optionsof.txt")
 				|| lower.equals("optionsshaders.txt") || lower.equals("optionsfullscreen.txt")
@@ -161,6 +166,20 @@ public class GameVerifier {
 				|| lower.startsWith("resourcepacks" + File.separator)
 				|| lower.startsWith("shaderpacks" + File.separator)
 				|| lower.startsWith("server-resource-packs" + File.separator);
+	}
+
+	private String stripFirstGameProfileSegment(String insideGame) {
+		if (isBlank(insideGame)) {
+			return "";
+		}
+
+		String normalized = normalizeSeparators(insideGame);
+		int separatorIndex = normalized.indexOf(File.separatorChar);
+		if (separatorIndex < 0 || separatorIndex + 1 >= normalized.length()) {
+			return normalized;
+		}
+
+		return normalized.substring(separatorIndex + 1);
 	}
 
 /**

@@ -9,6 +9,9 @@ public enum GameStyle {
 	VANILLA_1_19_HIGHER("net.minecraft.client.main.Main", "", ""), // from 1.16 to newers
 	VANILLA_PLUS("net.minecraft.client.main.Main", "", ""), // to 1.16
 	VANILLA_PLUS_1_16_HIGHER("net.minecraft.client.main.Main", "", ""), // from 1.16 to newers
+	FABRIC("net.fabricmc.loader.impl.launch.knot.KnotClient", "", ""),
+	QUILT("org.quiltmc.loader.impl.launch.knot.KnotClient", "", ""),
+	NEOFORGE("cpw.mods.bootstraplauncher.BootstrapLauncher", "", ""),
 	OPTIFINE("net.minecraft.launchwrapper.Launch", "optifine.OptiFineTweaker", ""),
 	FORGE_1_7_10_OLD("net.minecraft.launchwrapper.Launch", "cpw.mods.fml.common.launcher.FMLTweaker", ""),
 	FORGE_1_8_TO_1_12_2("net.minecraft.launchwrapper.Launch", "net.minecraftforge.fml.common.launcher.FMLTweaker", ""),

@@ -38,6 +38,7 @@ public class GameUpdater extends Thread {
     private static final String ASSETS_URL = "https://resources.download.minecraft.net/";
     private static final String FORGE_PROMOTIONS_URL = "https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json";
     private static final String FORGE_MAVEN_BASE = "https://maven.minecraftforge.net/net/minecraftforge/forge/";
+    private static final String NEOFORGE_MAVEN_BASE = "https://maven.neoforged.net/releases/net/neoforged/neoforge/";
     private static final String MOJANG_VERSION_MANIFEST_URL = "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json";
     private static final String BOOTSTRAPLAUNCHER_VERSION = "1.1.2";
     private static final String[] FORGE_WRAPPER_URLS = new String[] {
@@ -197,6 +198,14 @@ public class GameUpdater extends Thread {
             return new File(this.engine.getGameFolder().getBinDir(), "minecraft.jar");
         }
 
+        if (this.isNeoForge()) {
+            String minecraftBaseVersion = resolveNeoForgeMinecraftVersion();
+            File versionsDir = new File(this.engine.getGameFolder().getGameDir(), "versions");
+            File versionDir = new File(versionsDir, minecraftBaseVersion);
+            versionDir.mkdirs();
+            return new File(versionDir, minecraftBaseVersion + ".jar");
+        }
+
         String versionId = resolveVersionId();
         File versionsDir = new File(this.engine.getGameFolder().getBinDir(), "versions");
         File versionDir = new File(versionsDir, versionId);
@@ -331,6 +340,20 @@ public class GameUpdater extends Thread {
                     this.updateForgeLibraries();
                 }
 
+            }
+            if (this.isNeoForge()) {
+                Logger.log("Installing NeoForge profile  [5-bonus-ter/6]");
+                Logger.log("========================================");
+                this.setCurrentInfoText("Installation du profil NeoForge officiel.");
+                try {
+                    this.ensureNeoForgeInstalledOfficially();
+                } catch (Exception e) {
+                    File marker = new File(engine.getGameFolder().getCacheDir(), "neoforge-installer.failed");
+                    this.registerDownloadFailure(marker, "official neoforge installer",
+                            (e instanceof Exception) ? (Exception) e : new Exception(e));
+                    Logger.err("Official NeoForge installer failed: " + e.getMessage());
+                    return;
+                }
             }
             this.customJarsExecutor.shutdown();
             try {
@@ -524,19 +547,18 @@ public class GameUpdater extends Thread {
         GameVerifier.addToFileList(theFile.getAbsolutePath().replace(engine.getGameFolder().getCacheDir().getAbsolutePath(), "").replace('/', File.separatorChar));
         try {
             URL url = new URL(this.engine.getGameLinks().getJsonUrl());
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            URLConnection connection = url.openConnection();
             float totalDataRead = 0;
-            BufferedInputStream in = new BufferedInputStream(connection.getInputStream());
-            FileOutputStream fos = new FileOutputStream(theFile);
-            BufferedOutputStream bout = new BufferedOutputStream(fos, 1024);
-            byte[] data = new byte[1024];
-            int i = 0;
-            while ((i = in.read(data, 0, 1024)) >= 0) {
-                totalDataRead = totalDataRead + i;
-                bout.write(data, 0, i);
+            try (BufferedInputStream in = new BufferedInputStream(connection.getInputStream());
+                 FileOutputStream fos = new FileOutputStream(theFile);
+                 BufferedOutputStream bout = new BufferedOutputStream(fos, 1024)) {
+                byte[] data = new byte[1024];
+                int i = 0;
+                while ((i = in.read(data, 0, 1024)) >= 0) {
+                    totalDataRead = totalDataRead + i;
+                    bout.write(data, 0, i);
+                }
             }
-            bout.close();
-            in.close();
         } catch (Exception e) {
             e.printStackTrace();
             System.exit(0);
@@ -596,11 +618,12 @@ public class GameUpdater extends Thread {
                 jars.put(lib.getName(), libPath.getAbsolutePath());
             }
 
-            if (lib.getDownloads() != null && lib.getDownloads().getArtifact() != null
-                    && lib.getDownloads().getArtifact().getUrl() != null) {
+            String artifactUrl = resolveLibraryArtifactUrl(lib);
+            String artifactSha1 = resolveLibraryArtifactSha1(lib);
+            if (artifactUrl != null && !artifactUrl.trim().isEmpty()) {
                 final Downloader downloadTask = new Downloader(libPath,
-                        lib.getDownloads().getArtifact().getUrl().toString(),
-                        lib.getDownloads().getArtifact().getSha1(), engine);
+                        artifactUrl,
+                        artifactSha1, engine);
                 if (downloadTask.requireUpdate()) {
                     if (!verifier.existInDeleteList(libPath.getAbsolutePath()
                             .replace(engine.getGameFolder().getGameDir().getAbsolutePath(), ""))) {
@@ -693,6 +716,32 @@ public class GameUpdater extends Thread {
         }
 
         return new File(engine.getGameFolder().getLibsDir(), lib.getArtifactPath());
+    }
+
+    private String resolveLibraryArtifactUrl(MinecraftLibrary lib) {
+        if (lib == null) {
+            return null;
+        }
+        if (lib.getDownloads() != null && lib.getDownloads().getArtifact() != null
+                && lib.getDownloads().getArtifact().getUrl() != null) {
+            return lib.getDownloads().getArtifact().getUrl().toString();
+        }
+        if (lib.getUrl() == null || lib.getUrl().trim().isEmpty()) {
+            return null;
+        }
+
+        String baseUrl = lib.getUrl().trim();
+        if (!baseUrl.endsWith("/")) {
+            baseUrl = baseUrl + "/";
+        }
+        return baseUrl + lib.getArtifactPath();
+    }
+
+    private String resolveLibraryArtifactSha1(MinecraftLibrary lib) {
+        if (lib == null || lib.getDownloads() == null || lib.getDownloads().getArtifact() == null) {
+            return null;
+        }
+        return lib.getDownloads().getArtifact().getSha1();
     }
 
     private void queueNativeDownload(MinecraftLibrary lib) {
@@ -815,11 +864,12 @@ public class GameUpdater extends Thread {
                 jars.put(lib.getName(), libPath.getAbsolutePath());
             }
 
-            if (lib.getDownloads() != null && lib.getDownloads().getArtifact() != null
-                    && lib.getDownloads().getArtifact().getUrl() != null) {
+            String artifactUrl = resolveLibraryArtifactUrl(lib);
+            String artifactSha1 = resolveLibraryArtifactSha1(lib);
+            if (artifactUrl != null && !artifactUrl.trim().isEmpty()) {
                 final Downloader downloadTask = new Downloader(libPath,
-                        lib.getDownloads().getArtifact().getUrl().toString(),
-                        lib.getDownloads().getArtifact().getSha1(), engine);
+                        artifactUrl,
+                        artifactSha1, engine);
                 if (downloadTask.requireUpdate()) {
                     if (!verifier.existInDeleteList(libPath.getAbsolutePath()
                             .replace(engine.getGameFolder().getGameDir().getAbsolutePath(), ""))) {
@@ -992,27 +1042,188 @@ public class GameUpdater extends Thread {
     }
 
     private void prepareVanillaFilesForForgeInstaller(File installRoot) throws IOException {
+        prepareVanillaFilesForInstaller(installRoot, resolveVersionId());
+    }
+
+    private void prepareVanillaFilesForInstaller(File installRoot, String versionId) throws IOException {
         if (installRoot == null) {
-            throw new IOException("Forge install root is null");
+            throw new IOException("Installer root is null");
         }
 
-        String versionId = resolveVersionId();
         File targetVersionDir = new File(installRoot, "versions" + File.separator + versionId);
         if (!targetVersionDir.exists() && !targetVersionDir.mkdirs()) {
-            throw new IOException("Unable to create Forge version directory: " + targetVersionDir.getAbsolutePath());
+            throw new IOException("Unable to create version directory: " + targetVersionDir.getAbsolutePath());
         }
 
         File sourceJson = resolveOfficialVanillaVersionJson(versionId);
         File sourceJar = resolveOfficialVanillaClientJar(versionId);
         if (!sourceJson.exists()) {
-            throw new FileNotFoundException("Missing official vanilla json for Forge installer: " + sourceJson.getAbsolutePath());
+            throw new FileNotFoundException("Missing official vanilla json for installer: " + sourceJson.getAbsolutePath());
         }
         if (!sourceJar.exists()) {
-            throw new FileNotFoundException("Missing official vanilla client jar for Forge installer: " + sourceJar.getAbsolutePath());
+            throw new FileNotFoundException("Missing official vanilla client jar for installer: " + sourceJar.getAbsolutePath());
         }
 
         copyFileIfNeeded(sourceJson, new File(targetVersionDir, versionId + ".json"));
         copyFileIfNeeded(sourceJar, new File(targetVersionDir, versionId + ".jar"));
+    }
+
+    private void ensureNeoForgeInstalledOfficially() throws Exception {
+        if (this.hasInstalledNeoForgeClientArtifacts()) {
+            this.reloadNeoForgeProfileFromInstalledVersion();
+            this.clientJarFile = resolveClientJarTarget();
+            return;
+        }
+
+        this.ensureJavaPrepared();
+
+        String artifactVersion = resolveNeoForgeArtifactVersion();
+        String minecraftBaseVersion = resolveNeoForgeMinecraftVersion();
+        File installerJar = resolveNeoForgeInstallerJar(minecraftBaseVersion, artifactVersion);
+        File installRoot = this.engine.getGameFolder().getGameDir();
+
+        prepareVanillaFilesForInstaller(installRoot, minecraftBaseVersion);
+        ensureForgeInstallerLauncherProfiles(installRoot);
+
+        List<List<String>> attempts = new ArrayList<List<String>>();
+        String javaPath = resolveInstallerJavaBinary();
+        attempts.add(Arrays.asList(javaPath, "-jar", installerJar.getAbsolutePath(), "--installClient", installRoot.getAbsolutePath()));
+        attempts.add(Arrays.asList(javaPath, "-jar", installerJar.getAbsolutePath(), "--installClient"));
+
+        StringBuilder combinedOutput = new StringBuilder();
+        Exception lastError = null;
+
+        for (List<String> attempt : attempts) {
+            try {
+                int exit = runForgeInstallerCommand(attempt, installRoot, combinedOutput);
+                if (exit == 0 && this.hasInstalledNeoForgeClientArtifacts()) {
+                    this.reloadNeoForgeProfileFromInstalledVersion();
+                    this.clientJarFile = resolveClientJarTarget();
+                    return;
+                }
+            } catch (Exception e) {
+                lastError = e;
+                combinedOutput.append(e.getClass().getSimpleName()).append(": ").append(e.getMessage()).append("\n");
+            }
+        }
+
+        String message = "NeoForge installer did not generate the expected client artifacts.";
+        if (combinedOutput.length() > 0) {
+            message += " Output: " + combinedOutput.toString().trim();
+        }
+        if (lastError != null) {
+            throw new IOException(message, lastError);
+        }
+        throw new IOException(message);
+    }
+
+    private File resolveNeoForgeInstallerJar(String minecraftBaseVersion, String artifactVersion) throws IOException {
+        File cachedInstaller = new File(this.engine.getGameFolder().getCacheDir(),
+                "links" + File.separator + "neoforge" + File.separator + minecraftBaseVersion + File.separator
+                        + "neoforge-" + artifactVersion + "-installer.jar");
+        if (cachedInstaller.exists() && cachedInstaller.length() > 0L) {
+            return cachedInstaller;
+        }
+
+        String installerUrl = NEOFORGE_MAVEN_BASE + artifactVersion + "/neoforge-" + artifactVersion + "-installer.jar";
+        cachedInstaller.getParentFile().mkdirs();
+        downloadFile(installerUrl, cachedInstaller);
+        return cachedInstaller;
+    }
+
+    private boolean hasInstalledNeoForgeClientArtifacts() {
+        File versionJson = findInstalledNeoForgeVersionJson();
+        if (versionJson == null || !versionJson.exists()) {
+            return false;
+        }
+
+        String artifactVersion = resolveNeoForgeArtifactVersion();
+        File patchedClient = new File(this.engine.getGameFolder().getLibsDir(),
+                "net/neoforged/minecraft-client-patched/" + artifactVersion
+                        + "/minecraft-client-patched-" + artifactVersion + ".jar");
+        if (patchedClient.exists()) {
+            return true;
+        }
+
+        File neoforgeDir = new File(this.engine.getGameFolder().getLibsDir(),
+                "net/neoforged/neoforge/" + artifactVersion);
+        File clientJar = new File(neoforgeDir, "neoforge-" + artifactVersion + "-client.jar");
+        File universalJar = new File(neoforgeDir, "neoforge-" + artifactVersion + "-universal.jar");
+        return clientJar.exists() || universalJar.exists();
+    }
+
+    private File findInstalledNeoForgeVersionJson() {
+        String versionId = resolveVersionId();
+        File versionJson = new File(this.engine.getGameFolder().getGameDir(),
+                "versions" + File.separator + versionId + File.separator + versionId + ".json");
+        return versionJson.exists() ? versionJson : null;
+    }
+
+    private void reloadNeoForgeProfileFromInstalledVersion() throws IOException {
+        File versionJson = findInstalledNeoForgeVersionJson();
+        if (versionJson == null || !versionJson.exists()) {
+            throw new FileNotFoundException("Installed NeoForge version json not found");
+        }
+
+        String json = readFile(versionJson);
+        if (json == null || json.trim().isEmpty()) {
+            throw new IOException("Installed NeoForge version json is empty: " + versionJson.getAbsolutePath());
+        }
+
+        minecraftVersion = resolveVersionInheritance(JsonUtil.getGson().fromJson(json, MinecraftVersion.class), true);
+        engine.reg(minecraftVersion);
+    }
+
+    private String resolveNeoForgeArtifactVersion() {
+        String versionId = resolveVersionId();
+        if (versionId.startsWith("neoforge-")) {
+            return versionId.substring("neoforge-".length());
+        }
+        return versionId;
+    }
+
+    private String resolveNeoForgeMinecraftVersion() {
+        if (minecraftVersion != null && minecraftVersion.getInheritsFrom() != null
+                && !minecraftVersion.getInheritsFrom().trim().isEmpty()) {
+            return minecraftVersion.getInheritsFrom();
+        }
+
+        String fromArtifact = toNeoForgeMinecraftVersion(resolveNeoForgeArtifactVersion());
+        if (fromArtifact != null && !fromArtifact.trim().isEmpty()) {
+            return fromArtifact;
+        }
+        return resolveVersionId();
+    }
+
+    private String toNeoForgeMinecraftVersion(String artifactVersion) {
+        if (artifactVersion == null || artifactVersion.trim().isEmpty()) {
+            return null;
+        }
+
+        String normalized = artifactVersion.trim();
+        int qualifierIndex = normalized.indexOf('-');
+        if (qualifierIndex >= 0) {
+            normalized = normalized.substring(0, qualifierIndex);
+        }
+
+        String[] parts = normalized.split("\\.");
+        if (parts.length < 2) {
+            return null;
+        }
+
+        try {
+            int major = Integer.parseInt(parts[0]);
+            int minor = Integer.parseInt(parts[1]);
+            if (major < 20) {
+                return null;
+            }
+            if (minor == 0) {
+                return "1." + major;
+            }
+            return "1." + major + "." + minor;
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     private File resolveOfficialVanillaVersionJson(String versionId) throws IOException {
@@ -1603,7 +1814,10 @@ public class GameUpdater extends Thread {
     }
 
     private String resolvePreferredJavaComponent() {
-        if (shouldUseAlphaRuntimeForLegacyBootstrapForge()) {
+        if (shouldUseDeltaRuntimeForNeoForge()) {
+            return EnumJavaVersion.JAVA_RUNTIME_DELTA.getCode();
+        }
+        if (shouldUseAlphaRuntimeForModernModloader()) {
             return EnumJavaVersion.JAVA_RUNTIME_ALPHA.getCode();
         }
         if (shouldUseLegacyRuntimeForForge113To116()) {
@@ -1621,6 +1835,57 @@ public class GameUpdater extends Thread {
                 && this.engine.getGameStyle() != null
                 && this.engine.getGameStyle().equals(GameStyle.FORGE_1_13_HIGHER)
                 && ForgeLaunchResolver.resolveMode(this.engine) == ForgeLaunchResolver.Mode.LEGACY_BOOTSTRAP_LAUNCHER;
+    }
+
+    private boolean shouldUseAlphaRuntimeForModernModloader() {
+        return shouldUseAlphaRuntimeForLegacyBootstrapForge();
+    }
+
+    private boolean shouldUseDeltaRuntimeForNeoForge() {
+        return this.engine != null
+                && this.engine.getGameStyle() != null
+                && this.engine.getGameStyle().equals(GameStyle.NEOFORGE)
+                && resolveConfiguredJavaMajorVersion() >= 21;
+    }
+
+    private int resolveConfiguredJavaMajorVersion() {
+        if (this.getEngine() != null && this.getEngine().getMinecraftVersion() != null
+                && this.getEngine().getMinecraftVersion().getJavaVersion() != null
+                && this.getEngine().getMinecraftVersion().getJavaVersion().getMajorVersion() > 0) {
+            return this.getEngine().getMinecraftVersion().getJavaVersion().getMajorVersion();
+        }
+
+        String baseVersion = resolveVersionId();
+        if (this.isNeoForge()) {
+            baseVersion = resolveNeoForgeMinecraftVersion();
+        }
+
+        if (isMinecraftVersionAtLeast(baseVersion, 1, 21)) {
+            return 21;
+        }
+        return 0;
+    }
+
+    private boolean isMinecraftVersionAtLeast(String versionId, int major, int minor) {
+        if (versionId == null || versionId.trim().isEmpty()) {
+            return false;
+        }
+
+        String[] parts = versionId.trim().split("\\.");
+        if (parts.length < 2) {
+            return false;
+        }
+
+        try {
+            int currentMajor = Integer.parseInt(parts[0]);
+            int currentMinor = Integer.parseInt(parts[1]);
+            if (currentMajor != major) {
+                return currentMajor > major;
+            }
+            return currentMinor >= minor;
+        } catch (NumberFormatException ignored) {
+            return false;
+        }
     }
 
     private boolean shouldUseLegacyRuntimeForForge113To116() {
@@ -1687,6 +1952,9 @@ public class GameUpdater extends Thread {
         if (version == null) {
             return false;
         }
+        if (requiresJava21ForInstaller()) {
+            return version.major >= 21;
+        }
         if (version.major >= 9) {
             return true;
         }
@@ -1694,6 +1962,12 @@ public class GameUpdater extends Thread {
             return version.update >= 101;
         }
         return false;
+    }
+
+    private boolean requiresJava21ForInstaller() {
+        return this.engine != null
+                && this.engine.getGameStyle() != null
+                && this.engine.getGameStyle().equals(GameStyle.NEOFORGE);
     }
 
     private String describeJavaBinary(String javaBinary) {
@@ -1864,7 +2138,7 @@ public class GameUpdater extends Thread {
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
-            minecraftVersion = (MinecraftVersion) JsonUtil.getGson().fromJson(json, MinecraftVersion.class);
+            minecraftVersion = resolveVersionInheritance((MinecraftVersion) JsonUtil.getGson().fromJson(json, MinecraftVersion.class), true);
             engine.reg(minecraftVersion);
         }
     }
@@ -2084,8 +2358,117 @@ public class GameUpdater extends Thread {
             System.err.println(f.getAbsolutePath() + "not found.");
             e.printStackTrace();
         } finally {
-            minecraftLocalVersion = (MinecraftVersion) JsonUtil.getGson().fromJson(json, MinecraftVersion.class);
+            minecraftLocalVersion = resolveVersionInheritance((MinecraftVersion) JsonUtil.getGson().fromJson(json, MinecraftVersion.class), false);
             engine.reg(minecraftLocalVersion);
+        }
+    }
+
+    private MinecraftVersion resolveVersionInheritance(MinecraftVersion version, boolean allowRemoteLookup) {
+        return resolveVersionInheritance(version, allowRemoteLookup, new LinkedHashSet<String>());
+    }
+
+    private MinecraftVersion resolveVersionInheritance(MinecraftVersion version, boolean allowRemoteLookup, Set<String> visitedVersionIds) {
+        if (version == null || version.getInheritsFrom() == null || version.getInheritsFrom().trim().isEmpty()) {
+            return version;
+        }
+
+        String parentVersionId = version.getInheritsFrom().trim();
+        if (!visitedVersionIds.add(parentVersionId)) {
+            return version;
+        }
+
+        MinecraftVersion parentVersion = loadInheritedVersion(parentVersionId, allowRemoteLookup);
+        if (parentVersion == null) {
+            return version;
+        }
+
+        MinecraftVersion resolvedParent = resolveVersionInheritance(parentVersion, allowRemoteLookup, visitedVersionIds);
+        return MinecraftVersion.mergeInherited(resolvedParent, version);
+    }
+
+    private MinecraftVersion loadInheritedVersion(String versionId, boolean allowRemoteLookup) {
+        if (versionId == null || versionId.trim().isEmpty()) {
+            return null;
+        }
+
+        String json = readInheritedVersionJsonFromDisk(versionId);
+        if ((json == null || json.trim().isEmpty()) && allowRemoteLookup) {
+            json = downloadInheritedVersionJson(versionId);
+        }
+
+        if (json == null || json.trim().isEmpty()) {
+            return null;
+        }
+
+        try {
+            return JsonUtil.getGson().fromJson(json, MinecraftVersion.class);
+        } catch (Exception e) {
+            Logger.err("Unable to parse inherited version " + versionId + ": " + e.getMessage());
+            return null;
+        }
+    }
+
+    private String readInheritedVersionJsonFromDisk(String versionId) {
+        List<File> candidates = new ArrayList<File>();
+        candidates.add(new File(engine.getGameFolder().getCacheDir(), versionId + ".json"));
+        candidates.add(new File(engine.getGameFolder().getGameDir(),
+                "versions" + File.separator + versionId + File.separator + versionId + ".json"));
+        candidates.add(new File(engine.getGameFolder().getBinDir(),
+                "versions" + File.separator + versionId + File.separator + versionId + ".json"));
+
+        for (File candidate : candidates) {
+            if (candidate.exists() && candidate.isFile()) {
+                try {
+                    return readFile(candidate);
+                } catch (IOException ignored) {
+                }
+            }
+        }
+        return null;
+    }
+
+    private String downloadInheritedVersionJson(String versionId) {
+        try {
+            String manifestJson = JsonUtil.loadJSON(MOJANG_VERSION_MANIFEST_URL);
+            JsonObject manifest = JsonParser.parseString(manifestJson).getAsJsonObject();
+            JsonArray versions = manifest.getAsJsonArray("versions");
+            if (versions == null) {
+                return null;
+            }
+
+            for (JsonElement element : versions) {
+                if (element == null || !element.isJsonObject()) {
+                    continue;
+                }
+                JsonObject versionObject = element.getAsJsonObject();
+                if (!versionId.equals(versionObject.get("id").getAsString())) {
+                    continue;
+                }
+                String url = versionObject.get("url").getAsString();
+                String json = JsonUtil.loadJSON(url);
+                cacheInheritedVersionJson(versionId, json);
+                return json;
+            }
+        } catch (Exception e) {
+            Logger.err("Unable to download inherited version " + versionId + ": " + e.getMessage());
+        }
+        return null;
+    }
+
+    private void cacheInheritedVersionJson(String versionId, String json) {
+        if (versionId == null || versionId.trim().isEmpty() || json == null || json.trim().isEmpty()) {
+            return;
+        }
+
+        File cacheFile = new File(engine.getGameFolder().getCacheDir(), versionId + ".json");
+        File parent = cacheFile.getParentFile();
+        if (parent != null) {
+            parent.mkdirs();
+        }
+
+        try (Writer writer = new OutputStreamWriter(new FileOutputStream(cacheFile), "UTF-8")) {
+            writer.write(json);
+        } catch (IOException ignored) {
         }
     }
 
@@ -2180,6 +2563,12 @@ public class GameUpdater extends Thread {
 
 
     private boolean usesRemoteCustomFiles() {
+        String customFilesUrl = this.engine != null && this.engine.getGameLinks() != null
+                ? this.engine.getGameLinks().getCustomFilesUrl()
+                : null;
+        if (customFilesUrl == null || customFilesUrl.trim().isEmpty()) {
+            return false;
+        }
         if (this.engine.getGameStyle().equals(GameStyle.OPTIFINE)) {
             return false;
         }
@@ -2189,6 +2578,12 @@ public class GameUpdater extends Thread {
     }
 
     private boolean usesOfflineCustomFiles() {
+        String customFilesUrl = this.engine != null && this.engine.getGameLinks() != null
+                ? this.engine.getGameLinks().getCustomFilesUrl()
+                : null;
+        if (customFilesUrl == null || customFilesUrl.trim().isEmpty()) {
+            return false;
+        }
         if (this.engine.getGameStyle().equals(GameStyle.OPTIFINE)) {
             return false;
         }
@@ -2203,6 +2598,10 @@ public class GameUpdater extends Thread {
                 || this.engine.getGameStyle().equals(GameStyle.FORGE_1_7_10_OLD)
                 || this.engine.getGameStyle().equals(GameStyle.FORGE_1_8_TO_1_12_2)
                 || this.engine.getGameStyle().equals(GameStyle.FORGE_1_19_HIGHER);
+    }
+
+    private boolean isNeoForge() {
+        return this.engine.getGameStyle().equals(GameStyle.NEOFORGE);
     }
 
     private boolean isLegacyForgeStyle() {

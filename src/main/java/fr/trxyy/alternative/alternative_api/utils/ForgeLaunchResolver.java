@@ -99,7 +99,8 @@ public final class ForgeLaunchResolver {
                 || style.equals(GameStyle.FORGE_1_8_TO_1_12_2)
                 || style.equals(GameStyle.FORGE_1_13_HIGHER)
                 || style.equals(GameStyle.FORGE_1_17_HIGHER)
-                || style.equals(GameStyle.FORGE_1_19_HIGHER);
+                || style.equals(GameStyle.FORGE_1_19_HIGHER)
+                || style.equals(GameStyle.NEOFORGE);
     }
 
     private static String findLaunchTarget(GameForge gameForge) {

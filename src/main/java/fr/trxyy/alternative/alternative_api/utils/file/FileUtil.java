@@ -34,12 +34,15 @@ public class FileUtil {
 	 */
 	public static void deleteFakeNatives(File targetDir, GameEngine engine) throws IOException {
 	    int currentPlatform = getPlatform();
-	    File[] listOfFiles = engine.getGameFolder().getNativesDir().listFiles();
+	    if (targetDir == null) {
+	        return;
+	    }
+	    File[] listOfFiles = targetDir.listFiles();
 	    if (listOfFiles == null) {
 	        return;
 	    }
 
-	    move(engine.getGameFolder().getNativesDir(), engine.getGameFolder().getNativesDir());
+	    move(targetDir, targetDir);
 
 	    for (File file : listOfFiles) {
 	        if (file == null || !file.exists()) {
@@ -95,24 +98,12 @@ public class FileUtil {
         }
 
         Set<String> allowedNativeArchives = resolveCurrentNativeArchiveNames(engine);
-        if (allowedNativeArchives.isEmpty()) {
+        List<File> nativeArchives = resolveAvailableNativeArchives(engine, allowedNativeArchives);
+        if (nativeArchives.isEmpty()) {
             return;
         }
 
-        File[] listOfFiles = engine.getGameFolder().getNativesCacheDir().listFiles();
-        if (listOfFiles == null) {
-            return;
-        }
-
-        for (File nativeArchive : listOfFiles) {
-            if (nativeArchive == null || !nativeArchive.isFile()) {
-                continue;
-            }
-
-            if (!allowedNativeArchives.contains(nativeArchive.getName())) {
-                continue;
-            }
-
+        for (File nativeArchive : nativeArchives) {
             ZipFile zip = new ZipFile(nativeArchive);
             try {
                 Enumeration<? extends ZipEntry> entries = zip.entries();
@@ -163,6 +154,125 @@ public class FileUtil {
                 zip.close();
             }
         }
+    }
+
+    private static List<File> resolveAvailableNativeArchives(GameEngine engine, Set<String> allowedNativeArchives) {
+        LinkedHashMap<String, File> archivesByName = new LinkedHashMap<String, File>();
+        collectNativeArchivesFromDirectory(engine == null ? null : engine.getGameFolder().getNativesCacheDir(), allowedNativeArchives, archivesByName, false);
+        collectNativeArchivesFromDirectory(engine == null ? null : engine.getGameFolder().getLibsDir(), allowedNativeArchives, archivesByName, true);
+        collectNativeArchivesFromRuntimeClasspath(engine, archivesByName);
+        return new ArrayList<File>(archivesByName.values());
+    }
+
+    private static void collectNativeArchivesFromDirectory(File directory, Set<String> allowedNativeArchives,
+            Map<String, File> archivesByName, boolean recursive) {
+        if (allowedNativeArchives == null || allowedNativeArchives.isEmpty()) {
+            return;
+        }
+        if (directory == null || !directory.exists()) {
+            return;
+        }
+
+        File[] files = directory.listFiles();
+        if (files == null) {
+            return;
+        }
+
+        for (File file : files) {
+            if (file == null || !file.exists()) {
+                continue;
+            }
+            if (file.isDirectory()) {
+                if (recursive) {
+                    collectNativeArchivesFromDirectory(file, allowedNativeArchives, archivesByName, true);
+                }
+                continue;
+            }
+            if (allowedNativeArchives.contains(file.getName()) && !archivesByName.containsKey(file.getName())) {
+                archivesByName.put(file.getName(), file);
+            }
+        }
+    }
+
+    private static void collectNativeArchivesFromRuntimeClasspath(GameEngine engine, Map<String, File> archivesByName) {
+        if (engine == null || engine.getGameUpdater() == null) {
+            return;
+        }
+
+        Collection<String> runtimeJars = engine.getGameUpdater().getJars();
+        if (runtimeJars == null || runtimeJars.isEmpty()) {
+            return;
+        }
+
+        List<String> suffixCandidates = resolveNativeArchiveSuffixCandidates();
+        if (suffixCandidates.isEmpty()) {
+            return;
+        }
+
+        for (String runtimeJarPath : runtimeJars) {
+            if (runtimeJarPath == null || runtimeJarPath.trim().isEmpty()) {
+                continue;
+            }
+
+            File runtimeJar = new File(runtimeJarPath);
+            if (!runtimeJar.exists() || runtimeJar.isDirectory()) {
+                continue;
+            }
+
+            String runtimeJarName = runtimeJar.getName();
+            if (!runtimeJarName.endsWith(".jar")) {
+                continue;
+            }
+
+            String baseName = runtimeJarName.substring(0, runtimeJarName.length() - 4);
+            File parentDir = runtimeJar.getParentFile();
+            if (parentDir == null || !parentDir.exists()) {
+                continue;
+            }
+
+            for (String suffix : suffixCandidates) {
+                File nativeArchive = new File(parentDir, baseName + suffix + ".jar");
+                if (nativeArchive.exists() && !archivesByName.containsKey(nativeArchive.getName())) {
+                    archivesByName.put(nativeArchive.getName(), nativeArchive);
+                }
+            }
+        }
+    }
+
+    private static List<String> resolveNativeArchiveSuffixCandidates() {
+        ArrayList<String> candidates = new ArrayList<String>();
+        OperatingSystem currentOs = OperatingSystem.getCurrent();
+        if (currentOs == OperatingSystem.WINDOWS) {
+            if (isArm64Architecture()) {
+                candidates.add("-natives-windows-arm64");
+            }
+            if (Arch.CURRENT == Arch.x86) {
+                candidates.add("-natives-windows-x86");
+            }
+            candidates.add("-natives-windows");
+        } else if (currentOs == OperatingSystem.LINUX) {
+            if (isArm64Architecture()) {
+                candidates.add("-natives-linux-arm64");
+            }
+            candidates.add("-natives-linux");
+        } else if (currentOs == OperatingSystem.OSX) {
+            if (isArm64Architecture()) {
+                candidates.add("-natives-macos-arm64");
+                candidates.add("-natives-osx-arm64");
+            }
+            candidates.add("-natives-macos");
+            candidates.add("-natives-osx");
+        }
+        return candidates;
+    }
+
+    private static boolean isArm64Architecture() {
+        String osArch = System.getProperty("os.arch", "");
+        if (osArch == null) {
+            return false;
+        }
+        String normalized = osArch.toLowerCase(Locale.ROOT);
+        return normalized.contains("aarch64") || normalized.contains("arm64");
     }
 	
 	
