@@ -193,16 +193,14 @@ public class GameRunner {
 		/** ----- Minecraft Arguments 1.13+ ----- */
 		if (engine.getMinecraftVersion().getArguments() != null) {
 			List<Argument> argsNewer = engine.getMinecraftVersion().getArguments().get(ArgumentType.GAME);
-			final String[] newerArgumentsString = getArgumentsNewer(argsNewer);
+			final boolean legacyOptiFineCompatibility = shouldUseLegacyOptiFineArgumentCompatibility();
+			final String[] newerArgumentsString = legacyOptiFineCompatibility
+					? getArgumentsNewerLegacyCompatible(argsNewer)
+					: getArgumentsNewer(argsNewer);
 
-			StringBuffer sb = new StringBuffer();
-			for (int i = 0; i < newerArgumentsString.length; i++) {
-				sb.append(newerArgumentsString[i]).append(" ");
-			}
-			String sub = sb.toString().replace("--demo", "").replace("--width", "").replace("--height", "");
-			String strcs[] = sub.split(" ");
-			List<String> newerList = Arrays.asList(strcs);
-			commands.addAll(newerList);
+			commands.addAll(legacyOptiFineCompatibility
+					? filterLegacyJsonArguments(newerArgumentsString)
+					: filterModernMinecraftArguments(newerArgumentsString));
 		}
 
 		/** ----- Addons arguments ----- */
@@ -223,11 +221,13 @@ public class GameRunner {
 
 		/** ----- Direct connect to a server if required. ----- */
 		if (engine.getGameConnect() != null) {
-			System.out.println(engine.getGameConnect().getIp() + " " + engine.getGameConnect().getPort());
-			commands.add("--server");
-			commands.add(engine.getGameConnect().getIp());
-			commands.add("--port");
-			commands.add(String.valueOf(engine.getGameConnect().getPort()));
+			System.out.println(getConnectHost() + " " + getConnectPort());
+			if (!supportsQuickPlayMultiplayer()) {
+				commands.add("--server");
+				commands.add(getConnectHost());
+				commands.add("--port");
+				commands.add(getConnectPort());
+			}
 		}
 
 		/** ----- Tweak Class if required ----- */
@@ -237,9 +237,16 @@ public class GameRunner {
 		}
 
 	    /** ----- Filtrage des paramètres quickPlay* ----- */
-	    commands.removeIf(arg -> arg.startsWith("--quickPlay"));
+	    pruneMissingValueOption(commands, "--quickPlayPath");
+	    pruneMissingValueOption(commands, "--quickPlaySingleplayer");
+	    pruneMissingValueOption(commands, "--quickPlayMultiplayer");
+	    pruneMissingValueOption(commands, "--quickPlayRealms");
 	    /** ----- Suppression des arguments vides ----- */
 	    commands.removeIf(arg -> arg.trim().isEmpty());
+	    pruneMissingValueOption(commands, "--quickPlayPath");
+	    pruneMissingValueOption(commands, "--quickPlaySingleplayer");
+	    pruneMissingValueOption(commands, "--quickPlayMultiplayer");
+	    pruneMissingValueOption(commands, "--quickPlayRealms");
 	    pruneMissingValueOption(commands, "--clientId");
 	    pruneMissingValueOption(commands, "--xuid");
 	    pruneConflictingCollectorOptions(commands);
@@ -468,6 +475,12 @@ public class GameRunner {
 
 		for (File candidate : candidates) {
 			if (candidate.exists()) {
+				if (!OperatingSystem.isWindows() && !candidate.canExecute()) {
+					try {
+						candidate.setExecutable(true, false);
+					} catch (SecurityException ignored) {
+					}
+				}
 				return candidate.getAbsolutePath();
 			}
 		}
@@ -756,6 +769,10 @@ public class GameRunner {
 				: null;
 		if (basePlayDir == null) {
 			return new File(".");
+		}
+		if (shouldUseLegacyOptiFineSharedGameDirectory()) {
+			basePlayDir.mkdirs();
+			return basePlayDir;
 		}
 
 		File runtimeDir = new File(basePlayDir, resolveRuntimeProfileDirectoryName());
@@ -1327,6 +1344,12 @@ public class GameRunner {
 		values.put("client_id", reflectedClientId);
 		values.put("auth_xuid", reflectedXuid);
 		values.put("xuid", reflectedXuid);
+		values.put("quickPlayMultiplayer", buildQuickPlayMultiplayerValue());
+		values.put("quickPlaySingleplayer", "");
+		values.put("quickPlayRealms", "");
+		values.put("quickPlayPath", "");
+		values.put("resolution_width", getConfiguredWidth());
+		values.put("resolution_height", getConfiguredHeight());
 
 		String resolved = value;
 		for (Map.Entry<String, String> entry : values.entrySet()) {
@@ -1349,6 +1372,121 @@ public class GameRunner {
 				i--;
 			}
 		}
+	}
+
+	private boolean supportsQuickPlayMultiplayer() {
+		if (this.engine == null || this.engine.getMinecraftVersion() == null
+				|| this.engine.getMinecraftVersion().getArguments() == null
+				|| this.engine.getMinecraftVersion().getArguments().get(ArgumentType.GAME) == null) {
+			return false;
+		}
+
+		for (Argument argument : this.engine.getMinecraftVersion().getArguments().get(ArgumentType.GAME)) {
+			if (argument == null || !argument.appliesToCurrentEnvironment() || argument.getValues() == null) {
+				continue;
+			}
+			for (String value : argument.getValues()) {
+				if ("--quickPlayMultiplayer".equals(value) || (value != null && value.contains("${quickPlayMultiplayer}"))) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	private List<String> filterModernMinecraftArguments(String[] arguments) {
+		List<String> filteredArguments = new ArrayList<String>();
+		if (arguments == null || arguments.length == 0) {
+			return filteredArguments;
+		}
+
+		for (int i = 0; i < arguments.length; i++) {
+			String argument = arguments[i];
+			if (argument == null || argument.trim().isEmpty()) {
+				continue;
+			}
+			if ("--demo".equals(argument)) {
+				continue;
+			}
+			if ("--width".equals(argument) || "--height".equals(argument)) {
+				i++;
+				continue;
+			}
+			filteredArguments.add(argument);
+		}
+
+		return filteredArguments;
+	}
+
+	private String buildQuickPlayMultiplayerValue() {
+		String host = getConnectHost();
+		String port = getConnectPort();
+		if (host.isEmpty()) {
+			return "";
+		}
+		if (port.isEmpty() || "25565".equals(port)) {
+			return host;
+		}
+		return host + ":" + port;
+	}
+
+	private boolean shouldUseLegacyOptiFineArgumentCompatibility() {
+		return this.engine != null
+				&& this.engine.getGameStyle() != null
+				&& this.engine.getGameStyle().equals(GameStyle.OPTIFINE)
+				&& !isMinecraftVersionAtLeast(resolveBaseMinecraftVersionId(), 1, 16);
+	}
+
+	private boolean shouldUseLegacyOptiFineSharedGameDirectory() {
+		return shouldUseLegacyOptiFineArgumentCompatibility();
+	}
+
+	private String getConnectHost() {
+		if (this.engine == null || this.engine.getGameConnect() == null) {
+			return "";
+		}
+
+		String rawHost = safe(this.engine.getGameConnect().getIp()).trim();
+		String explicitPort = safe(String.valueOf(this.engine.getGameConnect().getPort())).trim();
+		if (!rawHost.isEmpty() && explicitPort.isEmpty()) {
+			int separatorIndex = rawHost.lastIndexOf(':');
+			if (separatorIndex > 0 && separatorIndex < rawHost.length() - 1 && rawHost.indexOf(':') == separatorIndex) {
+				return rawHost.substring(0, separatorIndex).trim();
+			}
+		}
+		return rawHost;
+	}
+
+	private String getConnectPort() {
+		if (this.engine == null || this.engine.getGameConnect() == null) {
+			return "";
+		}
+
+		String explicitPort = safe(String.valueOf(this.engine.getGameConnect().getPort())).trim();
+		if (!explicitPort.isEmpty()) {
+			return explicitPort;
+		}
+
+		String rawHost = safe(this.engine.getGameConnect().getIp()).trim();
+		int separatorIndex = rawHost.lastIndexOf(':');
+		if (separatorIndex > 0 && separatorIndex < rawHost.length() - 1 && rawHost.indexOf(':') == separatorIndex) {
+			return rawHost.substring(separatorIndex + 1).trim();
+		}
+		return "";
+	}
+
+	private String getConfiguredWidth() {
+		if (this.engine == null || this.engine.getGameSize() == null) {
+			return "";
+		}
+		return String.valueOf(this.engine.getGameSize().getWidth());
+	}
+
+	private String getConfiguredHeight() {
+		if (this.engine == null || this.engine.getGameSize() == null) {
+			return "";
+		}
+		return String.valueOf(this.engine.getGameSize().getHeight());
 	}
 
 	private String invokeSessionStringGetter(String methodName) {
@@ -1401,12 +1539,94 @@ public class GameRunner {
 	 */
 	@SuppressWarnings("deprecation")
 	private String[] getArgumentsNewer(List<Argument> args) {
+		if (args == null || args.isEmpty()) {
+			return new String[0];
+		}
 		final Map<String, String> map = new HashMap<String, String>();
 		final StrSubstitutor substitutor = new StrSubstitutor(map);
-		final String[] split = new String[args.size()];
-		for (int i = 0; i < args.size(); i++) {
-				split[i] = args.get(i).getArguments();
+		final List<String> collectedArguments = new ArrayList<String>();
+		for (Argument argument : args) {
+			if (argument == null || !argument.appliesToCurrentEnvironment() || argument.getValues() == null) {
+				continue;
+			}
+			for (String value : argument.getValues()) {
+				if (value != null && !value.trim().isEmpty()) {
+					collectedArguments.add(value);
+				}
+			}
 		}
+		final String[] split = collectedArguments.toArray(new String[0]);
+		map.put("auth_player_name", this.session.getUsername());
+		map.put("auth_uuid", this.session.getUuid());
+		map.put("auth_access_token", this.session.getToken());
+		map.put("user_type", "legacy");
+		map.put("version_name", this.engine.getMinecraftVersion().getId());
+		map.put("version_type", "release");
+		map.put("game_directory", this.resolveRuntimeGameDirectory().getAbsolutePath());
+		map.put("assets_root", this.engine.getGameFolder().getAssetsDir().getAbsolutePath());
+		map.put("assets_index_name", this.engine.getMinecraftVersion().getAssets());
+		map.put("user_properties", "{}");
+		map.put("quickPlayMultiplayer", buildQuickPlayMultiplayerValue());
+		map.put("quickPlaySingleplayer", "");
+		map.put("quickPlayRealms", "");
+		map.put("quickPlayPath", "");
+		map.put("resolution_width", getConfiguredWidth());
+		map.put("resolution_height", getConfiguredHeight());
+
+		for (int i = 0; i < split.length; i++)
+			split[i] = replaceLaunchPlaceholders(substitutor.replace(split[i]));
+
+		return split;
+	}
+
+	private List<String> filterLegacyJsonArguments(String[] arguments) {
+		List<String> filteredArguments = new ArrayList<String>();
+		if (arguments == null || arguments.length == 0) {
+			return filteredArguments;
+		}
+
+		StringBuilder sb = new StringBuilder();
+		for (String argument : arguments) {
+			if (argument != null && !argument.trim().isEmpty()) {
+				sb.append(argument).append(" ");
+			}
+		}
+
+		String[] splitArguments = sb.toString()
+				.replace("--demo", "")
+				.replace("--width", "")
+				.replace("--height", "")
+				.split(" ");
+
+		for (String splitArgument : splitArguments) {
+			if (splitArgument != null && !splitArgument.trim().isEmpty()) {
+				filteredArguments.add(splitArgument);
+			}
+		}
+
+		return filteredArguments;
+	}
+
+	@SuppressWarnings("deprecation")
+	private String[] getArgumentsNewerLegacyCompatible(List<Argument> args) {
+		if (args == null || args.isEmpty()) {
+			return new String[0];
+		}
+
+		final Map<String, String> map = new HashMap<String, String>();
+		final StrSubstitutor substitutor = new StrSubstitutor(map);
+		final List<String> collectedArguments = new ArrayList<String>();
+		for (Argument argument : args) {
+			if (argument == null || !argument.appliesToCurrentEnvironment()) {
+				continue;
+			}
+			String value = argument.getArguments();
+			if (value != null && !value.trim().isEmpty() && !"null".equals(value)) {
+				collectedArguments.add(value);
+			}
+		}
+
+		final String[] split = collectedArguments.toArray(new String[0]);
 		map.put("auth_player_name", this.session.getUsername());
 		map.put("auth_uuid", this.session.getUuid());
 		map.put("auth_access_token", this.session.getToken());
@@ -1418,8 +1638,9 @@ public class GameRunner {
 		map.put("assets_index_name", this.engine.getMinecraftVersion().getAssets());
 		map.put("user_properties", "{}");
 
-		for (int i = 0; i < split.length; i++)
+		for (int i = 0; i < split.length; i++) {
 			split[i] = replaceLaunchPlaceholders(substitutor.replace(split[i]));
+		}
 
 		return split;
 	}

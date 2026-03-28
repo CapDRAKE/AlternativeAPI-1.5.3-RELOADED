@@ -16,30 +16,48 @@ public class JavaManifest {
 	public Map<String, List<JavaRuntime>> linuxI386;
 	@SerializedName("mac-os")
 	public Map<String, List<JavaRuntime>> macos;
+	@SerializedName(value = "linux-arm64", alternate = { "linux-aarch64" })
+	public Map<String, List<JavaRuntime>> linuxArm64;
+	@SerializedName(value = "mac-os-arm64", alternate = { "macos-arm64", "mac-os-aarch64" })
+	public Map<String, List<JavaRuntime>> macosArm64;
 	@SerializedName("windows-x64")
 	public Map<String, List<JavaRuntime>> windows64;
 	@SerializedName("windows-x86")
 	public Map<String, List<JavaRuntime>> windows86;
+	@SerializedName("windows-arm64")
+	public Map<String, List<JavaRuntime>> windowsArm64;
 
 	public JavaManifest(JavaManifest o) {
 		this.gamecore = o.gamecore;
 		this.linux = o.linux;
 		this.linuxI386 = o.linuxI386;
 		this.macos = o.macos;
+		this.linuxArm64 = o.linuxArm64;
+		this.macosArm64 = o.macosArm64;
 		this.windows64 = o.windows64;
 		this.windows86 = o.windows86;
+		this.windowsArm64 = o.windowsArm64;
 	}
 
 	public String getCurrentOS() {
 		switch (OperatingSystem.getCurrentPlatform()) {
 		case WINDOWS:
+			if (OperatingSystem.isArm64Architecture() && windowsArm64 != null) {
+				return "windows-arm64";
+			}
 			if (!OperatingSystem.getJavaBit().equals(Arch.x64)) {
 				return "windows-x86";
 			}
 			return "windows-x64";
 		case OSX:
+			if (OperatingSystem.isArm64Architecture() && macosArm64 != null) {
+				return "mac-os-arm64";
+			}
 			return "mac-os";
 		case LINUX:
+			if (OperatingSystem.isArm64Architecture() && linuxArm64 != null) {
+				return "linux-arm64";
+			}
 			if (!OperatingSystem.getJavaBit().equals(Arch.x64)) {
 				return "linux-i386";
 			}
@@ -52,13 +70,22 @@ public class JavaManifest {
 	public Map<String, List<JavaRuntime>> getCurrentJava() {
 		switch (OperatingSystem.getCurrentPlatform()) {
 		case WINDOWS:
+			if (OperatingSystem.isArm64Architecture() && windowsArm64 != null) {
+				return windowsArm64;
+			}
 			if (!OperatingSystem.getJavaBit().equals(Arch.x64)) {
 				return windows86;
 			}
 			return windows64;
 		case OSX:
+			if (OperatingSystem.isArm64Architecture() && macosArm64 != null) {
+				return macosArm64;
+			}
 			return macos;
 		case LINUX:
+			if (OperatingSystem.isArm64Architecture() && linuxArm64 != null) {
+				return linuxArm64;
+			}
 			if (!OperatingSystem.getJavaBit().equals(Arch.x64)) {
 				return linuxI386;
 			}
@@ -84,11 +111,23 @@ public class JavaManifest {
 		return macos;
 	}
 
+	public Map<String, List<JavaRuntime>> getLinuxArm64() {
+		return linuxArm64;
+	}
+
+	public Map<String, List<JavaRuntime>> getMacosArm64() {
+		return macosArm64;
+	}
+
 	public Map<String, List<JavaRuntime>> getWindows64() {
 		return windows64;
 	}
 
 	public Map<String, List<JavaRuntime>> getWindows86() {
 		return windows86;
+	}
+
+	public Map<String, List<JavaRuntime>> getWindowsArm64() {
+		return windowsArm64;
 	}
 }

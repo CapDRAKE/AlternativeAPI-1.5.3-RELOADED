@@ -77,31 +77,43 @@ public enum OperatingSystem {
 	 * @return The Java Path
 	 */
 	public static String getJavaPath() {
-		if (System.getProperty("os.name").toLowerCase().contains("win"))
-			return "\"" + System.getProperty("java.home") + "\\bin\\java" + "\"";
-
-		return System.getProperty("java.home") + "/bin/java";
+		File javaBinary = resolveJavaBinary(new File(System.getProperty("java.home")), false);
+		if (javaBinary == null) {
+			return "java";
+		}
+		if (isWindows()) {
+			return "\"" + javaBinary.getAbsolutePath() + "\"";
+		}
+		return javaBinary.getAbsolutePath();
 	}
 	
 	/**
 	 * @return The Java Path Installed
 	 */
 	public static String getJavaPath(GameEngine engine) {
+		if (engine == null || engine.getMinecraftVersion() == null || engine.getMinecraftVersion().getJavaVersion() == null
+				|| engine.getGameFolder() == null) {
+			return getJavaPath();
+		}
 		String component = engine.getMinecraftVersion().getJavaVersion().getComponent();
 		File javaPath = new File(engine.getGameFolder().getBinDir(), component);
-		return javaPath + "/bin/java";
+		File javaBinary = resolveJavaBinary(javaPath, false);
+		if (javaBinary == null) {
+			return new File(new File(javaPath, "bin"), isWindows() ? "java.exe" : "java").getAbsolutePath();
+		}
+		return javaBinary.getAbsolutePath();
 	}
 
 	/**
 	 * @return The Java directory
 	 */
 	public String getJavaDir() {
-		final String separator = System.getProperty("file.separator");
-		final String path = System.getProperty("java.home") + separator + "bin" + separator;
-		if (getCurrentPlatform() == OperatingSystem.WINDOWS && new File(path + "javaw.exe").isFile()) {
-			return path + "javaw.exe";
+		File javaBinary = resolveJavaBinary(new File(System.getProperty("java.home")), true);
+		if (javaBinary != null) {
+			return javaBinary.getAbsolutePath();
 		}
-		return path + "java";
+		final String separator = System.getProperty("file.separator");
+		return System.getProperty("java.home") + separator + "bin" + separator + "java";
 	}
 
 	/**
@@ -174,6 +186,12 @@ public enum OperatingSystem {
 				} catch (IOException e1) {
 					Logger.log("Failed to open link " + link.toString());
 				}
+			} else if (getCurrentPlatform() == OperatingSystem.LINUX || getCurrentPlatform() == OperatingSystem.SOLARIS) {
+				try {
+					Runtime.getRuntime().exec(new String[] { "xdg-open", link.toString() });
+				} catch (IOException e1) {
+					Logger.log("Failed to open link " + link.toString());
+				}
 			} else {
 				Logger.log("Failed to open link " + link.toString());
 			}
@@ -215,13 +233,69 @@ public enum OperatingSystem {
 				Logger.log("Couldn't open " + path + " through cmd.exe");
 			}
 		}
+		if (os == OperatingSystem.LINUX || os == OperatingSystem.SOLARIS) {
+			try {
+				Runtime.getRuntime().exec(new String[] { "xdg-open", absolutePath });
+				return;
+			} catch (IOException e) {
+				Logger.log("Couldn't open " + path + " through xdg-open");
+			}
+		}
 		try {
 			final Class<?> desktopClass = Class.forName("java.awt.Desktop");
 			final Object desktop = desktopClass.getMethod("getDesktop", (Class[]) new Class[0]).invoke(null,
 					new Object[0]);
-			desktopClass.getMethod("browse", URI.class).invoke(desktop, path.toURI());
+			desktopClass.getMethod("open", File.class).invoke(desktop, path);
 		} catch (Throwable e3) {
 			Logger.log("Couldn't open " + path + " through Desktop.browse()");
 		}
+	}
+
+	public static boolean isWindows() {
+		return getCurrentPlatform() == OperatingSystem.WINDOWS;
+	}
+
+	public static boolean isLinux() {
+		return getCurrentPlatform() == OperatingSystem.LINUX;
+	}
+
+	public static boolean isMac() {
+		return getCurrentPlatform() == OperatingSystem.OSX;
+	}
+
+	public static boolean isArm64Architecture() {
+		String osArch = System.getProperty("os.arch", "");
+		if (osArch == null) {
+			return false;
+		}
+		String normalized = osArch.toLowerCase();
+		return normalized.contains("aarch64") || normalized.contains("arm64");
+	}
+
+	public static boolean is32BitJvm() {
+		return Arch.x86.equals(getJavaBit());
+	}
+
+	private static File resolveJavaBinary(File javaHome, boolean preferWindowless) {
+		if (javaHome == null) {
+			return null;
+		}
+		File[] candidates = preferWindowless
+				? new File[] {
+						new File(javaHome, "bin" + File.separator + "javaw.exe"),
+						new File(javaHome, "bin" + File.separator + "java.exe"),
+						new File(javaHome, "bin" + File.separator + "java")
+				}
+				: new File[] {
+						new File(javaHome, "bin" + File.separator + "java.exe"),
+						new File(javaHome, "bin" + File.separator + "javaw.exe"),
+						new File(javaHome, "bin" + File.separator + "java")
+				};
+		for (File candidate : candidates) {
+			if (candidate.isFile()) {
+				return candidate;
+			}
+		}
+		return null;
 	}
 }

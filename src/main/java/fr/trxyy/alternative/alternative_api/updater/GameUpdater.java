@@ -814,13 +814,24 @@ public class GameUpdater extends Thread {
                 candidates.add("natives-windows");
                 candidates.add("natives-windows-x86");
             }
-            candidates.add("natives-windows-arm64");
+            if (OperatingSystem.isArm64Architecture()) {
+                candidates.add("natives-windows-arm64");
+            }
         } else if (currentOs == OperatingSystem.LINUX) {
+            if (OperatingSystem.isArm64Architecture()) {
+                candidates.add("natives-linux-arm64");
+                candidates.add("natives-linux-aarch64");
+            }
             candidates.add("natives-linux");
         } else if (currentOs == OperatingSystem.OSX) {
+            if (OperatingSystem.isArm64Architecture()) {
+                candidates.add("natives-macos-arm64");
+                candidates.add("natives-osx-arm64");
+                candidates.add("natives-macos-aarch64");
+                candidates.add("natives-osx-aarch64");
+            }
             candidates.add("natives-macos");
             candidates.add("natives-osx");
-            candidates.add("natives-osx-arm64");
         }
 
         for (String candidate : candidates) {
@@ -831,7 +842,7 @@ public class GameUpdater extends Thread {
 
         for (String key : classifiers.keySet()) {
             String lower = key.toLowerCase(Locale.ROOT);
-            if (currentOs == OperatingSystem.WINDOWS && lower.contains("windows") && !lower.contains("arm64")) {
+            if (currentOs == OperatingSystem.WINDOWS && lower.contains("windows")) {
                 return key;
             }
             if (currentOs == OperatingSystem.LINUX && lower.contains("linux")) {
@@ -1810,7 +1821,60 @@ public class GameUpdater extends Thread {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
+        applyJavaFilePermissions(targetComponent, objects);
         Logger.log("Jre Update finished for component " + targetComponent + ".");
+    }
+
+    private void applyJavaFilePermissions(String targetComponent, Map<String, JVMFile> objects) {
+        if (OperatingSystem.isWindows() || objects == null || objects.isEmpty() || this.engine == null || this.engine.getGameFolder() == null) {
+            return;
+        }
+
+        File localFolder = new File(engine.getGameFolder().getBinDir(), targetComponent);
+        for (Map.Entry<String, JVMFile> entry : objects.entrySet()) {
+            if (entry == null) {
+                continue;
+            }
+            String relativePath = entry.getKey();
+            JVMFile jvmFile = entry.getValue();
+            if (relativePath == null || relativePath.trim().isEmpty() || jvmFile == null) {
+                continue;
+            }
+
+            File local = new File(localFolder, relativePath);
+            if (!local.isFile()) {
+                continue;
+            }
+
+            if (jvmFile.isExecutable() || looksLikeUnixJavaBinary(relativePath)) {
+                ensureExecutable(local);
+            }
+        }
+    }
+
+    private boolean looksLikeUnixJavaBinary(String relativePath) {
+        if (relativePath == null) {
+            return false;
+        }
+        String normalized = relativePath.replace('\\', '/').toLowerCase(Locale.ROOT);
+        return normalized.startsWith("bin/")
+                && !normalized.endsWith(".dll")
+                && !normalized.endsWith(".so")
+                && !normalized.endsWith(".dylib")
+                && !normalized.endsWith(".jnilib");
+    }
+
+    private void ensureExecutable(File file) {
+        if (file == null || !file.exists() || file.canExecute()) {
+            return;
+        }
+        try {
+            if (!file.setExecutable(true, false)) {
+                Logger.log("Unable to mark Java runtime file executable: " + file.getAbsolutePath());
+            }
+        } catch (SecurityException e) {
+            Logger.log("Unable to update executable bit for " + file.getAbsolutePath() + ": " + e.getMessage());
+        }
     }
 
     private String resolvePreferredJavaComponent() {

@@ -3,6 +3,7 @@ package fr.trxyy.alternative.alternative_api.utils.file;
 import fr.trxyy.alternative.alternative_api.*;
 import fr.trxyy.alternative.alternative_api.minecraft.json.DownloadInfo;
 import fr.trxyy.alternative.alternative_api.minecraft.json.MinecraftLibrary;
+import fr.trxyy.alternative.alternative_api.minecraft.json.MinecraftRules;
 import fr.trxyy.alternative.alternative_api.minecraft.json.MinecraftVersion;
 import fr.trxyy.alternative.alternative_api.minecraft.utils.Arch;
 import fr.trxyy.alternative.alternative_api.utils.OperatingSystem;
@@ -97,19 +98,31 @@ public class FileUtil {
             targetDir.mkdirs();
         }
 
-        Set<String> allowedNativeArchives = resolveCurrentNativeArchiveNames(engine);
+        Map<String, MinecraftRules> nativeArchiveRules = resolveCurrentNativeArchiveRules(engine);
+        Set<String> allowedNativeArchives = nativeArchiveRules.keySet();
         List<File> nativeArchives = resolveAvailableNativeArchives(engine, allowedNativeArchives);
         if (nativeArchives.isEmpty()) {
             return;
         }
 
         for (File nativeArchive : nativeArchives) {
+            MinecraftRules extractRules = nativeArchiveRules.get(nativeArchive.getName());
             ZipFile zip = new ZipFile(nativeArchive);
             try {
                 Enumeration<? extends ZipEntry> entries = zip.entries();
                 while (entries.hasMoreElements()) {
                     ZipEntry entry = entries.nextElement();
                     String entryName = entry.getName();
+
+                    if (entry.isDirectory()) {
+                        continue;
+                    }
+                    if (skipFoldersInExtraction != null && entryName.startsWith(skipFoldersInExtraction)) {
+                        continue;
+                    }
+                    if (extractRules != null && !extractRules.shouldExtract(entryName)) {
+                        continue;
+                    }
 
                     if (currentPlatform == 1 || currentPlatform == 2) { // Linux/Unix
                         if (!entryName.endsWith(".so")) {
@@ -253,12 +266,15 @@ public class FileUtil {
         } else if (currentOs == OperatingSystem.LINUX) {
             if (isArm64Architecture()) {
                 candidates.add("-natives-linux-arm64");
+                candidates.add("-natives-linux-aarch64");
             }
             candidates.add("-natives-linux");
         } else if (currentOs == OperatingSystem.OSX) {
             if (isArm64Architecture()) {
                 candidates.add("-natives-macos-arm64");
                 candidates.add("-natives-osx-arm64");
+                candidates.add("-natives-macos-aarch64");
+                candidates.add("-natives-osx-aarch64");
             }
             candidates.add("-natives-macos");
             candidates.add("-natives-osx");
@@ -267,12 +283,7 @@ public class FileUtil {
     }
 
     private static boolean isArm64Architecture() {
-        String osArch = System.getProperty("os.arch", "");
-        if (osArch == null) {
-            return false;
-        }
-        String normalized = osArch.toLowerCase(Locale.ROOT);
-        return normalized.contains("aarch64") || normalized.contains("arm64");
+        return OperatingSystem.isArm64Architecture();
     }
 	
 	
@@ -597,11 +608,11 @@ public class FileUtil {
         return 5;
     }
     
-    private static Set<String> resolveCurrentNativeArchiveNames(GameEngine engine) {
-        LinkedHashSet<String> archiveNames = new LinkedHashSet<String>();
+    private static Map<String, MinecraftRules> resolveCurrentNativeArchiveRules(GameEngine engine) {
+        LinkedHashMap<String, MinecraftRules> archiveRules = new LinkedHashMap<String, MinecraftRules>();
         MinecraftVersion version = resolveCurrentMinecraftVersion(engine);
         if (version == null || version.getLibraries() == null) {
-            return archiveNames;
+            return archiveRules;
         }
 
         for (MinecraftLibrary lib : version.getLibraries()) {
@@ -612,7 +623,7 @@ public class FileUtil {
             if (isNativeCoordinateLibrary(lib)) {
                 String nativeFileName = resolveDeclaredNativeFileName(lib);
                 if (nativeFileName != null && !nativeFileName.trim().isEmpty()) {
-                    archiveNames.add(nativeFileName);
+                    registerNativeArchiveRule(archiveRules, nativeFileName, lib.getExtractRules());
                 }
                 continue;
             }
@@ -621,12 +632,21 @@ public class FileUtil {
             if (classifier != null) {
                 String nativeFileName = lib.getArtifactNatives(classifier);
                 if (nativeFileName != null && !nativeFileName.trim().isEmpty()) {
-                    archiveNames.add(nativeFileName);
+                    registerNativeArchiveRule(archiveRules, nativeFileName, lib.getExtractRules());
                 }
             }
         }
 
-        return archiveNames;
+        return archiveRules;
+    }
+
+    private static void registerNativeArchiveRule(Map<String, MinecraftRules> archiveRules, String archiveName, MinecraftRules rules) {
+        if (archiveRules == null || archiveName == null || archiveName.trim().isEmpty()) {
+            return;
+        }
+        if (!archiveRules.containsKey(archiveName)) {
+            archiveRules.put(archiveName, rules);
+        }
     }
     
     private static MinecraftVersion resolveCurrentMinecraftVersion(GameEngine engine) {
@@ -694,13 +714,24 @@ public class FileUtil {
                 candidates.add("natives-windows");
                 candidates.add("natives-windows-x86");
             }
-            candidates.add("natives-windows-arm64");
+            if (OperatingSystem.isArm64Architecture()) {
+                candidates.add("natives-windows-arm64");
+            }
         } else if (currentOs == OperatingSystem.LINUX) {
+            if (OperatingSystem.isArm64Architecture()) {
+                candidates.add("natives-linux-arm64");
+                candidates.add("natives-linux-aarch64");
+            }
             candidates.add("natives-linux");
         } else if (currentOs == OperatingSystem.OSX) {
+            if (OperatingSystem.isArm64Architecture()) {
+                candidates.add("natives-macos-arm64");
+                candidates.add("natives-osx-arm64");
+                candidates.add("natives-macos-aarch64");
+                candidates.add("natives-osx-aarch64");
+            }
             candidates.add("natives-macos");
             candidates.add("natives-osx");
-            candidates.add("natives-osx-arm64");
         }
 
         for (String candidate : candidates) {
@@ -711,13 +742,13 @@ public class FileUtil {
 
         for (String key : classifiers.keySet()) {
             String lower = key.toLowerCase(Locale.ROOT);
-            if (currentOs == OperatingSystem.WINDOWS && lower.contains("windows") && !lower.contains("arm64")) {
+            if (currentOs == OperatingSystem.WINDOWS && lower.contains("windows")) {
                 return key;
             }
             if (currentOs == OperatingSystem.LINUX && lower.contains("linux")) {
                 return key;
             }
-            if (currentOs == OperatingSystem.OSX && (lower.contains("osx") || lower.contains("macos"))) {
+            if (currentOs == OperatingSystem.OSX && (lower.contains("osx") || lower.contains("macos") || lower.contains("mac-os"))) {
                 return key;
             }
         }
