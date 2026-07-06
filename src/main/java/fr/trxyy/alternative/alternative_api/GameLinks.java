@@ -18,15 +18,15 @@ public class GameLinks {
      */
     public String JSON_NAME;
     /**
-     * The maintenance url, ex: http://mywebsite.com/status.cfg
+     * The maintenance url, ex: http://mywebsite.com/status.json
      */
     public String MAINTENANCE;
     /**
-     * The ignore list, ex: http://mywebsite.com/ignore.cfg
+     * The ignore list, ex: http://mywebsite.com/ignore.json
      */
     public String IGNORE_LIST;
     /**
-     * The delete list, ex: http://mywebsite.com/delete.cfg
+     * The delete list, ex: http://mywebsite.com/delete.json
      */
     public String DELETE_LIST;
     /**
@@ -48,10 +48,10 @@ public class GameLinks {
         this.JSON_NAME = jsonName;
         this.JSON_URL = this.BASE_URL + jsonName;          // FIX: utiliser BASE_URL
 
-        this.IGNORE_LIST = this.BASE_URL + "ignore.cfg";   // FIX: utiliser BASE_URL
-        this.DELETE_LIST = this.BASE_URL + "delete.cfg";
+        this.IGNORE_LIST = this.BASE_URL + "ignore.json";   // FIX: utiliser BASE_URL
+        this.DELETE_LIST = this.BASE_URL + "delete.json";
         this.CUSTOM_FILES_URL = this.BASE_URL + "files/";
-        this.MAINTENANCE = this.BASE_URL + "status.cfg";
+        this.MAINTENANCE = this.BASE_URL + "status.json";
     }
 
     /**

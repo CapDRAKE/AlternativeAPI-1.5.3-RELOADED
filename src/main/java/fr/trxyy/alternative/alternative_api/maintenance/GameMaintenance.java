@@ -3,7 +3,13 @@ package fr.trxyy.alternative.alternative_api.maintenance;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLConnection;
+import java.nio.charset.StandardCharsets;
+
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import fr.trxyy.alternative.alternative_api.GameEngine;
 
@@ -36,23 +42,51 @@ public class GameMaintenance {
 	}
 
 	/**
-	 * Read the status.cfg file in url
+	 * Read the status.json file in url
 	 * If "Ok", launcher will continue
-	 * If Other text but not "Ok", the launcher will display a Alert with the content of the status.cfg file.
-	 * @return The content of the status.cfg
+	 * If Other text but not "Ok", the launcher will display a Alert with the content of the status.json file.
+	 * Also accepts the legacy plain-text status.cfg format for backward compatibility.
+	 * @return The status content
 	 * @throws IOException
 	 */
 	public String readMaintenance() throws IOException {
-		@SuppressWarnings("deprecation")
-		URL oracle = new URL(this.engine.getGameLinks().getMaintenanceUrl());
-		BufferedReader in = new BufferedReader(new InputStreamReader(oracle.openStream()));
-		String s = "";
-		String inputLine;
-		while ((inputLine = in.readLine()) != null) {
-			s = inputLine;
+		URL url = new URL(this.engine.getGameLinks().getMaintenanceUrl());
+		URLConnection connection = url.openConnection();
+		connection.setRequestProperty("User-Agent", "MajestyLauncher");
+		if (connection instanceof HttpURLConnection) {
+			((HttpURLConnection) connection).setInstanceFollowRedirects(true);
 		}
-		in.close();
-		return s;
+		connection.setConnectTimeout(10000);
+		connection.setReadTimeout(10000);
+
+		StringBuilder raw = new StringBuilder();
+		try (BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
+			String inputLine;
+			while ((inputLine = in.readLine()) != null) {
+				raw.append(inputLine).append('\n');
+			}
+		}
+
+		return parseStatus(raw.toString().trim());
+	}
+
+	/**
+	 * @param raw The raw body of the status file (JSON or legacy plain text)
+	 * @return The status value ("Ok" or a maintenance message)
+	 */
+	private String parseStatus(String raw) {
+		if (raw.isEmpty()) {
+			return raw;
+		}
+		try {
+			JsonObject obj = JsonParser.parseString(raw).getAsJsonObject();
+			if (obj.has("status") && !obj.get("status").isJsonNull()) {
+				return obj.get("status").getAsString();
+			}
+		} catch (Exception ignored) {
+			// Pas du JSON valide : on suppose l'ancien format texte brut (status.cfg)
+		}
+		return raw;
 	}
 
 	/**

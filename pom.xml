@@ -7,7 +7,7 @@
 
     <groupId>fr.trxyy.alternative</groupId>
     <artifactId>alternative-api</artifactId>
-    <version>1.6</version>
+    <version>1.6.1</version>
     <packaging>jar</packaging>
     <name>AlternativeAPI</name>
 

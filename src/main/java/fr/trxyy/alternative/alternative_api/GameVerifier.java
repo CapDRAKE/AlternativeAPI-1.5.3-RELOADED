@@ -7,12 +7,18 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.TrueFileFilter;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import fr.trxyy.alternative.alternative_api.utils.file.FileUtil;
 
@@ -276,8 +282,11 @@ public class GameVerifier {
 	/**
 	 * Getting the ignore list from URL
 	 *
+	 * Accepte le nouveau format JSON ({"files": [...], "folders": [...]})
+	 * et, en fallback, l'ancien format texte brut (ignore.cfg, une entrée par ligne).
+	 *
 	 * FIXES:
-	 * - si ignore.cfg absent (404) => ignore list vide (pas de crash)
+	 * - si ignore.json absent (404) => ignore list vide (pas de crash)
 	 * - si URL null/malformée => return
 	 * - try-with-resources => pas de NPE sur read.close()
 	 */
@@ -298,39 +307,77 @@ public class GameVerifier {
 			return;
 		}
 
-		try (BufferedReader read = new BufferedReader(new InputStreamReader(url.openStream(), StandardCharsets.UTF_8))) {
-			String i;
-			while ((i = read.readLine()) != null) {
-				i = i.trim();
-				if (i.isEmpty() || i.startsWith("#")) continue;
-
-				String correctName = normalizeSeparators(i);
-
-				boolean isFolder = correctName.endsWith("/") || correctName.endsWith("\\") || correctName.endsWith(String.valueOf(File.separatorChar));
-				if (isFolder) {
-					// on stocke la forme “dossier” avec séparateur final pour matcher plus facilement
-					correctName = normalizeSeparators(correctName);
-					if (!correctName.endsWith(File.separator)) {
-						correctName = correctName + File.separator;
-					}
-					this.ignoreListFolder.add(correctName);
-				} else {
-					this.ignoreList.add("" + this.engine.getGameFolder().getGameDir() + File.separatorChar + correctName);
-				}
-			}
+		String raw;
+		try {
+			raw = readUrlBody(url);
 		} catch (FileNotFoundException e) {
-			// 404 ignore.cfg => OK (ex: Mojang), on continue sans ignore list
+			// 404 ignore.json => OK (ex: Mojang), on continue sans ignore list
+			return;
 		} catch (IOException e) {
 			// réseau / autre IO => pas bloquant, on continue sans ignore list
 			e.printStackTrace();
+			return;
+		}
+
+		if (!parseIgnoreListJson(raw)) {
+			parseIgnoreListLegacy(raw);
+		}
+	}
+
+	private boolean parseIgnoreListJson(String raw) {
+		try {
+			JsonObject obj = JsonParser.parseString(raw).getAsJsonObject();
+			JsonArray files = obj.has("files") ? obj.getAsJsonArray("files") : null;
+			JsonArray folders = obj.has("folders") ? obj.getAsJsonArray("folders") : null;
+			if (files == null && folders == null) return false;
+
+			if (files != null) {
+				for (JsonElement el : files) {
+					addIgnoreEntry(el.getAsString(), false);
+				}
+			}
+			if (folders != null) {
+				for (JsonElement el : folders) {
+					addIgnoreEntry(el.getAsString(), true);
+				}
+			}
+			return true;
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
+	private void parseIgnoreListLegacy(String raw) {
+		for (String line : raw.split("\\r?\\n")) {
+			String i = line.trim();
+			if (i.isEmpty() || i.startsWith("#")) continue;
+
+			boolean isFolder = i.endsWith("/") || i.endsWith("\\");
+			addIgnoreEntry(i, isFolder);
+		}
+	}
+
+	private void addIgnoreEntry(String entry, boolean isFolder) {
+		String correctName = normalizeSeparators(entry);
+		if (isFolder) {
+			// on stocke la forme “dossier” avec séparateur final pour matcher plus facilement
+			if (!correctName.endsWith(File.separator)) {
+				correctName = correctName + File.separator;
+			}
+			this.ignoreListFolder.add(correctName);
+		} else {
+			this.ignoreList.add("" + this.engine.getGameFolder().getGameDir() + File.separatorChar + correctName);
 		}
 	}
 
 	/**
 	 * Getting the delete list from URL
 	 *
+	 * Accepte le nouveau format JSON ({"files": [...]})
+	 * et, en fallback, l'ancien format texte brut (delete.cfg, une entrée par ligne).
+	 *
 	 * FIXES:
-	 * - si delete.cfg absent (404) => delete list vide (pas de crash)
+	 * - si delete.json absent (404) => delete list vide (pas de crash)
 	 * - si URL null/malformée => return
 	 */
 	public void getDeleteList() {
@@ -350,19 +397,66 @@ public class GameVerifier {
 			return;
 		}
 
-		try (BufferedReader read = new BufferedReader(new InputStreamReader(url.openStream(), StandardCharsets.UTF_8))) {
-			String i;
-			while ((i = read.readLine()) != null) {
-				i = i.trim();
-				if (i.isEmpty() || i.startsWith("#")) continue;
-
-				String correctName = normalizeSeparators(i);
-				this.deleteList.add("" + this.engine.getGameFolder().getGameDir() + File.separatorChar + correctName);
-			}
+		String raw;
+		try {
+			raw = readUrlBody(url);
 		} catch (FileNotFoundException e) {
-			// 404 delete.cfg => OK
+			// 404 delete.json => OK
+			return;
 		} catch (IOException e) {
 			e.printStackTrace();
+			return;
 		}
+
+		if (!parseDeleteListJson(raw)) {
+			parseDeleteListLegacy(raw);
+		}
+	}
+
+	private boolean parseDeleteListJson(String raw) {
+		try {
+			JsonObject obj = JsonParser.parseString(raw).getAsJsonObject();
+			if (!obj.has("files")) return false;
+
+			for (JsonElement el : obj.getAsJsonArray("files")) {
+				addDeleteEntry(el.getAsString());
+			}
+			return true;
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
+	private void parseDeleteListLegacy(String raw) {
+		for (String line : raw.split("\\r?\\n")) {
+			String i = line.trim();
+			if (i.isEmpty() || i.startsWith("#")) continue;
+			addDeleteEntry(i);
+		}
+	}
+
+	private void addDeleteEntry(String entry) {
+		String correctName = normalizeSeparators(entry);
+		this.deleteList.add("" + this.engine.getGameFolder().getGameDir() + File.separatorChar + correctName);
+	}
+
+	/**
+	 * Lit le corps d'une URL avec un User-Agent explicite (certains hébergeurs
+	 * renvoient 403 sur les requêtes sans User-Agent).
+	 */
+	private String readUrlBody(URL url) throws IOException {
+		URLConnection connection = url.openConnection();
+		connection.setRequestProperty("User-Agent", "MajestyLauncher");
+		connection.setConnectTimeout(10000);
+		connection.setReadTimeout(10000);
+
+		StringBuilder sb = new StringBuilder();
+		try (BufferedReader read = new BufferedReader(new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
+			String line;
+			while ((line = read.readLine()) != null) {
+				sb.append(line).append('\n');
+			}
+		}
+		return sb.toString();
 	}
 }
