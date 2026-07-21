@@ -25,7 +25,12 @@ public class GameRunner {
 			"servers.dat",
 			"servers.dat_old",
 			"resourcepacks",
-			"shaderpacks"
+			"shaderpacks",
+			"options.txt",
+			"optionsof.txt",
+			"optionsshaders.txt",
+			"optionsfullscreen.txt",
+			"optionsoculus.txt"
 	};
 
 	/**
@@ -764,20 +769,7 @@ public class GameRunner {
 	}
 
 	private File resolveRuntimeGameDirectory() {
-		File basePlayDir = this.engine != null && this.engine.getGameFolder() != null
-				? this.engine.getGameFolder().getPlayDir()
-				: null;
-		if (basePlayDir == null) {
-			return new File(".");
-		}
-		if (shouldUseLegacyOptiFineSharedGameDirectory()) {
-			basePlayDir.mkdirs();
-			return basePlayDir;
-		}
-
-		File runtimeDir = new File(basePlayDir, resolveRuntimeProfileDirectoryName());
-		runtimeDir.mkdirs();
-		return runtimeDir;
+		return GameProfilePaths.resolveRuntimeGameDirectory(this.engine);
 	}
 
 	private File resolveSharedProfileDirectory() {
@@ -801,35 +793,9 @@ public class GameRunner {
 			return new File(".");
 		}
 
-		File runtimeDir = new File(baseNativesDir, resolveRuntimeProfileDirectoryName());
+		File runtimeDir = new File(baseNativesDir, GameProfilePaths.resolveProfileDirectoryName(this.engine));
 		runtimeDir.mkdirs();
 		return runtimeDir;
-	}
-
-	private String resolveRuntimeProfileDirectoryName() {
-		String styleName = this.engine != null && this.engine.getGameStyle() != null
-				? this.engine.getGameStyle().name().toLowerCase(Locale.ROOT)
-				: "unknown";
-		String versionId = resolveCurrentVersionId();
-		if (versionId == null || versionId.trim().isEmpty()) {
-			versionId = resolveBaseMinecraftVersionId();
-		}
-		if (versionId == null || versionId.trim().isEmpty()) {
-			versionId = "default";
-		}
-		return sanitizePathSegment(styleName + "-" + versionId);
-	}
-
-	private String sanitizePathSegment(String rawValue) {
-		if (rawValue == null || rawValue.trim().isEmpty()) {
-			return "default";
-		}
-
-		String sanitized = rawValue.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
-		while (sanitized.contains("..")) {
-			sanitized = sanitized.replace("..", ".");
-		}
-		return sanitized.isEmpty() ? "default" : sanitized;
 	}
 
 	private void syncSharedProfileData() {
@@ -1435,10 +1401,6 @@ public class GameRunner {
 				&& this.engine.getGameStyle() != null
 				&& this.engine.getGameStyle().equals(GameStyle.OPTIFINE)
 				&& !isMinecraftVersionAtLeast(resolveBaseMinecraftVersionId(), 1, 16);
-	}
-
-	private boolean shouldUseLegacyOptiFineSharedGameDirectory() {
-		return shouldUseLegacyOptiFineArgumentCompatibility();
 	}
 
 	private String getConnectHost() {

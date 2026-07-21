@@ -71,7 +71,16 @@ public class GameEngine {
 	 * is running Online mode (connected to internet)
 	 */
 	private boolean isOnline = true;
-	
+	/**
+	 * The plain Minecraft version id currently requested/selected by the user (ex: "1.21.11").
+	 * Unlike {@link #minecraftVersion}, this is known as soon as GameLinks/GameStyle are
+	 * registered (config/settings), without waiting for GameUpdater to download/parse the
+	 * version json. Used to deterministically resolve the per-profile game directory
+	 * (see GameProfilePaths) so UI panels (mods/packs/shaders) and the actual game launch
+	 * always agree on the same folder.
+	 */
+	private String requestedVersionId;
+
 	/**
 	 * The Constructor
 	 * @param folder The GameFolder for the folder name in APPDATA
@@ -290,7 +299,21 @@ public class GameEngine {
 	public GameStyle getGameStyle() {
 		return this.gameStyle;
 	}
-	
+
+	/**
+	 * @return The plain Minecraft version id currently requested/selected (ex: "1.21.11"), may be null
+	 */
+	public String getRequestedVersionId() {
+		return this.requestedVersionId;
+	}
+
+	/**
+	 * @param versionId The plain Minecraft version id currently requested/selected (ex: "1.21.11")
+	 */
+	public void setRequestedVersionId(String versionId) {
+		this.requestedVersionId = versionId;
+	}
+
 	public void setGameStyle(GameStyle gameStyle) {
 		this.gameStyle = gameStyle;
 	}

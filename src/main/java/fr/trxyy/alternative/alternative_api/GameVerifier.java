@@ -171,7 +171,9 @@ public class GameVerifier {
 				|| lower.startsWith("crash-reports" + File.separator)
 				|| lower.startsWith("resourcepacks" + File.separator)
 				|| lower.startsWith("shaderpacks" + File.separator)
-				|| lower.startsWith("server-resource-packs" + File.separator);
+				|| lower.startsWith("server-resource-packs" + File.separator)
+				|| lower.startsWith("mods" + File.separator)
+				|| lower.startsWith("config" + File.separator);
 	}
 
 	private String stripFirstGameProfileSegment(String insideGame) {
