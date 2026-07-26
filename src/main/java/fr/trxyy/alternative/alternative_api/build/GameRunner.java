@@ -75,25 +75,98 @@ public class GameRunner {
     	ArrayList<String> commands = this.getLaunchCommand();
         ProcessBuilder processBuilder = new ProcessBuilder(commands);
         processBuilder.redirectInput(Redirect.INHERIT);
-        processBuilder.redirectOutput(Redirect.INHERIT);
-        processBuilder.redirectError(Redirect.INHERIT);
 		processBuilder.directory(engine.getGameFolder().getGameDir());
 		processBuilder.redirectErrorStream(true);
+
+		// Journalise la sortie du jeu dans un fichier (utile pour le support en cas
+		// de crash), tout en la laissant aussi visible dans la console du launcher.
+		File logFile = resolveGameLogFile();
+		if (logFile != null) {
+			processBuilder.redirectOutput(Redirect.appendTo(logFile));
+			processBuilder.redirectError(Redirect.appendTo(logFile));
+		} else {
+			processBuilder.redirectOutput(Redirect.INHERIT);
+			processBuilder.redirectError(Redirect.INHERIT);
+		}
+
 		Logger.log("Launching: " + hideAccessToken(commands));
 		try {
+			long sessionStart = System.currentTimeMillis();
 			Process process = processBuilder.start();
 			process.waitFor();
+			long playedMs = System.currentTimeMillis() - sessionStart;
 			syncSharedProfileData();
+
+			// Notifie le launcher de la durée de la session (temps de jeu par profil).
+			java.util.function.LongConsumer cb = gameSessionCallback;
+			if (cb != null) {
+				try { cb.accept(playedMs); } catch (Throwable ignored) {}
+			}
+
 			int exitVal = process.exitValue();
 			if (exitVal != 0) {
 				Logger.log("\n\n");
 				Logger.log("========================================");
 				Logger.log("|         Minecraft has crashed.       |");
 				Logger.log("========================================");
+				onGameCrashed(exitVal, logFile);
 			}
 		} catch (IOException e) {
 			throw new Exception("Cannot launch !", e);
 		}
+	}
+
+	/**
+	 * Callback optionnel invoqué à la fin de la session de jeu avec sa durée (ms).
+	 * Permet au launcher de comptabiliser le temps de jeu sans coupler cette classe
+	 * à sa logique de profils. Défini par le launcher, ignoré s'il est null.
+	 */
+	public static volatile java.util.function.LongConsumer gameSessionCallback;
+
+	/**
+	 * Fichier de log de la session de jeu : &lt;gameDir&gt;/logs/latest-game.log.
+	 * Réinitialisé à chaque lancement. Null si le dossier ne peut être créé.
+	 */
+	private File resolveGameLogFile() {
+		try {
+			File logsDir = new File(engine.getGameFolder().getGameDir(), "logs");
+			logsDir.mkdirs();
+			File f = new File(logsDir, "latest-game.log");
+			// Repart propre à chaque lancement pour ne garder que la dernière session.
+			if (f.exists()) f.delete();
+			f.createNewFile();
+			return f;
+		} catch (Exception e) {
+			return null;
+		}
+	}
+
+	/**
+	 * Crash du jeu : réaffiche la fenêtre du launcher et propose d'ouvrir le log.
+	 * Tout est protégé — un souci ici ne doit jamais masquer le crash d'origine.
+	 */
+	private void onGameCrashed(int exitVal, File logFile) {
+		try {
+			if (engine.getStage() == null) return;
+			Platform.runLater(() -> {
+				try {
+					engine.getStage().show();
+					javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
+							javafx.scene.control.Alert.AlertType.ERROR);
+					alert.setTitle("Minecraft s'est fermé");
+					alert.setHeaderText("Le jeu s'est arrêté de façon inattendue (code " + exitVal + ").");
+					alert.setContentText("Un journal a été enregistré. Tu peux l'ouvrir pour comprendre le problème "
+							+ "ou le transmettre au support MajestyCraft.");
+					javafx.scene.control.ButtonType openLog = new javafx.scene.control.ButtonType("Ouvrir le log");
+					javafx.scene.control.ButtonType close = javafx.scene.control.ButtonType.CLOSE;
+					alert.getButtonTypes().setAll(openLog, close);
+					java.util.Optional<javafx.scene.control.ButtonType> res = alert.showAndWait();
+					if (res.isPresent() && res.get() == openLog && logFile != null && logFile.isFile()) {
+						Desktop.getDesktop().open(logFile);
+					}
+				} catch (Throwable ignored) {}
+			});
+		} catch (Throwable ignored) {}
 	}
 
     /**

@@ -21,9 +21,18 @@ public final class GameProfilePaths {
 
 	/**
 	 * @param engine The GameEngine instance
-	 * @return Le nom du dossier de profil (ex: "fabric-1.21.11")
+	 * @return Le nom du dossier de profil : le nom explicite du profil actif si le
+	 *         launcher en a défini un (système de profils nommés), sinon le nom
+	 *         historique calculé "style-version" (ex: "fabric-1.21.11")
 	 */
 	public static String resolveProfileDirectoryName(GameEngine engine) {
+		if (engine != null) {
+			String override = engine.getProfileDirectoryName();
+			if (override != null && !override.trim().isEmpty()) {
+				return sanitizePathSegment(override);
+			}
+		}
+
 		String styleName = engine != null && engine.getGameStyle() != null
 				? engine.getGameStyle().name().toLowerCase(Locale.ROOT)
 				: "unknown";

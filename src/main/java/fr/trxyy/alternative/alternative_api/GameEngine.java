@@ -80,6 +80,14 @@ public class GameEngine {
 	 * always agree on the same folder.
 	 */
 	private String requestedVersionId;
+	/**
+	 * Nom de dossier de profil explicite (système de profils nommés du launcher).
+	 * Quand il est défini, GameProfilePaths l'utilise tel quel à la place du nom
+	 * historique calculé "style-version" : deux profils peuvent ainsi partager la
+	 * même version+modloader tout en ayant des dossiers de jeu (mods/configs) séparés.
+	 * Null = comportement historique.
+	 */
+	private String profileDirectoryName;
 
 	/**
 	 * The Constructor
@@ -316,6 +324,20 @@ public class GameEngine {
 
 	public void setGameStyle(GameStyle gameStyle) {
 		this.gameStyle = gameStyle;
+	}
+
+	/**
+	 * @return Le nom de dossier du profil actif (peut être null = comportement historique)
+	 */
+	public String getProfileDirectoryName() {
+		return this.profileDirectoryName;
+	}
+
+	/**
+	 * @param directoryName Le nom de dossier du profil actif (null pour revenir au comportement historique)
+	 */
+	public void setProfileDirectoryName(String directoryName) {
+		this.profileDirectoryName = directoryName;
 	}
 
 	/**
