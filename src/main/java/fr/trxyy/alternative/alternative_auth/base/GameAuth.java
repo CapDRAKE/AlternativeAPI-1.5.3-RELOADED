@@ -171,6 +171,27 @@ public class GameAuth {
         return session;
     }
 
+    /**
+     * Deconnexion complete du compte Microsoft : vide la session courante ET
+     * supprime les jetons enregistres sur le disque. Sans cette suppression, la
+     * connexion suivante se ferait en silence sur le meme compte, rendant tout
+     * changement de compte impossible.
+     *
+     * @param engine The GameEngine instance
+     * @return true si les jetons ont bien ete supprimes
+     */
+    public boolean logout(GameEngine engine) {
+        this.isAuthenticated = false;
+        this.session = new Session();
+        try {
+            this.authConfig = new AuthConfig(engine);
+            return this.authConfig.deleteConfigFile();
+        } catch (Exception e) {
+            Logger.err("Echec de la deconnexion Microsoft : " + e.getMessage());
+            return false;
+        }
+    }
+
     /* ------------------------------------------------------------------
      *  Tentative silencieuse : si un refresh_token est présent et valide
      *  → on met à jour la Session et on renvoie true.

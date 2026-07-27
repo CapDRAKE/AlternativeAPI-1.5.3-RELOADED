@@ -37,6 +37,32 @@ public class AuthConfig {
 	public boolean canRefresh() {
 	    return this.authConfig.exists();
 	}
+
+	/**
+	 * Supprime les jetons Microsoft enregistres (deconnexion reelle).
+	 * Sans cela, un refresh silencieux reconnecte toujours le meme compte : c'est
+	 * ce qui empechait de changer de compte Microsoft.
+	 * @return true si plus aucun jeton n'est present apres l'appel
+	 */
+	public boolean deleteConfigFile() {
+		this.microsoftModel = null;
+		this.read = false;
+		if (this.authConfig == null || !this.authConfig.exists()) {
+			return true;
+		}
+		boolean deleted = this.authConfig.delete();
+		if (!deleted) {
+			// Fichier verrouille : on le vide pour qu'aucun jeton ne reste exploitable.
+			try (FileWriter fw = new FileWriter(this.authConfig, false)) {
+				fw.write("{}");
+			} catch (IOException e) {
+				Logger.err("Impossible de supprimer les jetons Microsoft : " + e.getMessage());
+				return false;
+			}
+		}
+		Logger.log("Jetons Microsoft supprimes (deconnexion).");
+		return true;
+	}
 	
 	/**
 	 * Update a value in the config json
