@@ -182,7 +182,9 @@ public class MicrosoftXboxAuth {
 				}
 			}
 				
-				Logger.log("POST " + url + " → HTTP " + http + " / " + resp);
+				// Jetons masques : les reponses Xbox/Minecraft contiennent Token et
+				// access_token, qui donneraient un acces complet au compte.
+				Logger.log("POST " + url + " → HTTP " + http + " / " + AuthConstants.redactSecrets(resp));
 				return resp;                       // peut être vide, mais plus de NPE
 				
 		} catch (Exception ex) {

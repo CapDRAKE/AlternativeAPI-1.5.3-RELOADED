@@ -158,7 +158,8 @@ public class MicrosoftOAuthClient {
             while ((line = br.readLine()) != null)
                 sb.append(line);
 
-            Logger.log("POST " + endpoint + " → " + sb);
+            // Jetons masques : la reponse brute contient access_token / refresh_token.
+            Logger.log("POST " + endpoint + " → " + AuthConstants.redactSecrets(sb.toString()));
             return sb.toString();
         }
     }

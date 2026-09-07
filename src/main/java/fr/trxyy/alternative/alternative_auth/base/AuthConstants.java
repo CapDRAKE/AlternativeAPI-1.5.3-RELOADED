@@ -59,6 +59,42 @@ public class AuthConstants {
     public static final Charset UTF_8       = Charset.forName("UTF-8");
 
     // ─────────────────────────────────────────────────────────────────────────────
+    //  Journalisation securisee
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Champs des reponses d'authentification qui ne doivent JAMAIS apparaitre dans
+     * les journaux : ils donnent un acces complet au compte Microsoft/Minecraft.
+     */
+    private static final String[] SECRET_FIELDS = {
+            "access_token", "refresh_token", "id_token", "accessToken", "Token"
+    };
+
+    /**
+     * Masque les jetons d'une reponse d'authentification avant journalisation.
+     *
+     * Sans cela la reponse brute (qui contient access_token et refresh_token en
+     * entier) se retrouve dans la console : toute capture d'ecran ou log transmis
+     * au support divulguerait alors l'acces au compte.
+     *
+     * @param payload la reponse brute (JSON), peut etre null
+     * @return la meme chaine avec la valeur des champs sensibles remplacee
+     */
+    public static String redactSecrets(String payload) {
+        if (payload == null || payload.isEmpty()) {
+            return payload;
+        }
+        String result = payload;
+        for (String field : SECRET_FIELDS) {
+            // "champ" : "valeur"  ->  "champ" : "***masque***"
+            result = result.replaceAll(
+                    "(\"" + field + "\"\\s*:\\s*\")[^\"]*(\")",
+                    "$1***masque***$2");
+        }
+        return result;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
     //  Versioning (librairie)
     // ─────────────────────────────────────────────────────────────────────────────
 
