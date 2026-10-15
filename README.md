@@ -1,53 +1,73 @@
-<h4 align="center">A JavaFX Library for Minecraft Launchers. Works with Forge 1.13+!</h4>
-<h4 align="center">Works 100% on Windows and other OS.</h4>
+<h3 align="center">AlternativeAPI</h3>
+<p align="center">Bibliothèque Java 8 / JavaFX pour créer son propre launcher Minecraft.</p>
 
-AlternativeAuth is now bundled directly inside AlternativeAPI, so a single JAR provides both launcher and authentication classes.
+AlternativeAPI prend en charge toute la partie technique d'un launcher : téléchargement
+et vérification du jeu, téléchargement automatique du Java requis par chaque version,
+lancement, comptes Microsoft et hors ligne, Forge / Fabric / NeoForge, synchronisation
+de fichiers depuis votre serveur, mode maintenance. Vous écrivez l'interface, la lib
+fait le reste.
 
-## Forge 1.13+ (deleting libraries)
+L'authentification (anciennement AlternativeAuth) est incluse : un seul jar suffit.
 
-```
-Go inside your libraries folder in your host.
-Go to libraries/com/google/guava/guava/
-And keep only the higher version, delete all others.
-## OR
-Go inside your delete.cfg folder in your host
-and write a new line by putting the location of the guava libraries
-which are lower than the highest
+## Démarrage rapide
 
-Example:
-libraries/com/google/guava/guava/15.0/guava-15.0.jar
-libraries/com/google/guava/guava/20.0/guava-20.0.jar
-libraries/com/google/guava/guava/21.0/guava-21.0.jar
+```java
+GameFolder folder = new GameFolder("monlauncher");                 // %APPDATA%\.monlauncher
+GameLinks links = new GameLinks(urlDuJsonMojang);                  // la version à installer
+LauncherPreferences prefs = new LauncherPreferences("Mon launcher", 880, 520, Mover.DONT_MOVE);
+GameEngine engine = new GameEngine(folder, links, prefs, GameStyle.VANILLA_1_19_HIGHER);
+engine.reg(GameMemory.RAM_4G);
 
-```
-## Distants files
+Session session = new GameAuth("Steve", "", AccountType.OFFLINE).getSession();
 
-- ignore.cfg
-```
-bin/game/servers.dat
-bin/game/options.txt
-bin/game/optionsshaders.txt
-bin/game/optionsof.txt
-bin/game/usercache.json
-bin/launcher_config.json
-bin/game/screenshots/
-bin/game/saves/
-bin/game/resourcepacks/
-bin/game/shaderpacks/
-bin/game/config/
-bin/game/mods/
-logs/
-```
-- delete.cfg
-```
-libraries/com/google/guava/guava/15.0/guava-15.0.jar
+GameUpdater updater = new GameUpdater();
+updater.reg(engine);
+updater.reg(session);
+engine.reg(updater);
+updater.start();                                                   // télécharge puis lance le jeu
 ```
 
-## How to Use
+## Documentation
+
+La documentation complète est dans [`docs/`](docs/README.md) :
+
+1. [Installation](docs/01-installation.md)
+2. [Tutoriel : un launcher basique](docs/02-tutoriel-launcher-basique.md) — Minecraft 1.21.1 en trois classes
+3. [Concepts](docs/03-concepts.md)
+4. [Mise à jour et lancement](docs/04-mise-a-jour-et-lancement.md)
+5. [Options de jeu](docs/05-options-de-jeu.md)
+6. [Authentification](docs/06-authentification.md)
+7. [Interface](docs/07-interface.md)
+8. [Serveur de fichiers](docs/08-serveur-de-fichiers.md)
+9. [Modloaders](docs/09-modloaders.md)
+10. [Référence de l'API](docs/10-reference-api.md)
+11. [Dépannage et limites connues](docs/11-depannage.md)
+
+Le projet du tutoriel, prêt à compiler, est dans [`examples/launcher-basique`](examples/launcher-basique).
+
+## Installation en bref
+
+Prérequis : un **JDK 8 avec JavaFX** et Maven.
+
+```bash
+git clone https://github.com/CapDRAKE/AlternativeAPI-1.5.3-RELOADED.git
+cd AlternativeAPI-1.5.3-RELOADED
+# adaptez le chemin de jfxrt.jar dans pom.xml si votre JDK est ailleurs
+mvn clean install
 ```
-	private GameFolder gameFolder = new GameFolder("customlauncher");
-	private LauncherPreferences launcherPreferences = new LauncherPreferences("Launcher Template AlternativeAPI", 950, 600, true);
-	private GameLinks gameLinks = new GameLinks("http://127.0.0.1/alternative/1_16_3/", "1.16.3.json");
-	private GameEngine gameEngine = new GameEngine(this.gameFolder, this.gameLinks, this.launcherPreferences, GameStyle.FORGE_1_13_HIGHER);
-	private GameForge newForge = new GameForge("fmlclient", "34.1.0", "1.16.3", "net.minecraftforge", "20200911.084530");
-  ```
+
+Puis, dans votre launcher :
+
+```xml
+<dependency>
+    <groupId>fr.trxyy.alternative</groupId>
+    <artifactId>alternative-api</artifactId>
+    <version>1.7.0</version>
+</dependency>
+```
+
+Détails : [Installation](docs/01-installation.md).
+
+## Licence
+
+[Apache 2.0](LICENSE).
