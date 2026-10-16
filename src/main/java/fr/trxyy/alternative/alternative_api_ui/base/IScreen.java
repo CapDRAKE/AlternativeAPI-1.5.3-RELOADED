@@ -32,9 +32,18 @@ import javafx.util.Duration;
  */
 public class IScreen {
 	/**
+	 * Dossier des ressources dans le classpath (même valeur que
+	 * LauncherPreferences.getResourceLocation())
+	 */
+	private static final String RESOURCES_PREFIX = "/resources/";
+	/**
 	 * The resource location
 	 */
 	private ResourceLocation RESOURCE_LOCATION = new ResourceLocation();
+	/**
+	 * Le dernier son joué par playSound
+	 */
+	private MediaPlayer soundPlayer;
 	/**
 	 * The logo Image
 	 */
@@ -132,8 +141,10 @@ public class IScreen {
 	public Image loadImage(String image) {
 		BufferedImage bufferedImage = null;
 		try {
-			Logger.log(" " + getResourceLocation() + image);
-			bufferedImage = ImageIO.read(IScreen.class.getResourceAsStream(getResourceLocation() + image));
+			// Préfixe en dur : getResourceLocation() renvoie un objet, pas un chemin, et
+			// le concaténer donnait "...ResourceLocation@1a2b3c" + image (jamais trouvé).
+			Logger.log(" " + RESOURCES_PREFIX + image);
+			bufferedImage = ImageIO.read(IScreen.class.getResourceAsStream(RESOURCES_PREFIX + image));
 		} catch (IOException e) {
 			Logger.log("Echec du chargement de la ressource demandée.");
 		}
@@ -173,15 +184,22 @@ public class IScreen {
 	 * @param sound The sound name
 	 */
 	public void playSound(String sound) {
-		URL resourceUrl = IScreen.class.getResource(getResourceLocation() + sound);
+		URL resourceUrl = IScreen.class.getResource(RESOURCES_PREFIX + sound);
+		if (resourceUrl == null) {
+			Logger.err("Son introuvable dans les ressources : " + RESOURCES_PREFIX + sound);
+			return;
+		}
 		Media theMedia = null;
 		try {
 			theMedia = new Media(resourceUrl.toURI().toString());
 		} catch (URISyntaxException e) {
 			Logger.log(e.toString());
+			return;
 		}
-		final MediaPlayer mediaPlayer = new MediaPlayer(theMedia);
-		mediaPlayer.play();
+		// Gardé dans un champ : un MediaPlayer sans référence peut être libéré par le
+		// ramasse-miettes avant la fin du son.
+		this.soundPlayer = new MediaPlayer(theMedia);
+		this.soundPlayer.play();
 	}
 	
 	public Rectangle drawRect(Pane root, int x, int y, int w, int h, Color r) {

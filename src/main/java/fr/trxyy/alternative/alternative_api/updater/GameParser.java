@@ -34,7 +34,9 @@ public class GameParser {
      * @param engine The GameEngine instance
      */
     public static void getFilesToDownload(GameEngine engine) {
-        downloadXMLFile(engine);
+        if (!downloadXMLFile(engine)) {
+            return;
+        }
         try {
             @SuppressWarnings("deprecation")
             final URL resourceUrl = new URL(engine.getGameLinks().getCustomFilesUrl());
@@ -174,7 +176,7 @@ public class GameParser {
      * Download the XML files
      * @param engine The GameEngine instance
      */
-    public static void downloadXMLFile(GameEngine engine) {
+    public static boolean downloadXMLFile(GameEngine engine) {
         File theFile = new File(engine.getGameFolder().getCacheDir(), "downloads.xml");
         GameVerifier.addToFileList(theFile.getAbsolutePath().replace(engine.getGameFolder().getCacheDir().getAbsolutePath(), "").replace('/', File.separatorChar));
         try {
@@ -202,9 +204,14 @@ public class GameParser {
                     bout.write(data, 0, i);
                 }
             }
+            return true;
         } catch (Exception e) {
+            // Plus de System.exit : l'échec est signalé par hasDownloadError() et le jeu
+            // n'est pas lancé (les fichiers du serveur sont requis), mais le launcher
+            // reste ouvert et peut l'afficher.
             e.printStackTrace();
-            System.exit(0);
+            engine.getGameUpdater().registerDownloadFailure(theFile, engine.getGameLinks().getCustomFilesUrl(), e);
+            return false;
         }
     }
 

@@ -156,7 +156,7 @@ public class GameRunner {
 					alert.setTitle("Minecraft s'est fermé");
 					alert.setHeaderText("Le jeu s'est arrêté de façon inattendue (code " + exitVal + ").");
 					alert.setContentText("Un journal a été enregistré. Tu peux l'ouvrir pour comprendre le problème "
-							+ "ou le transmettre au support MajestyCraft.");
+							+ "ou le transmettre au support.");
 					javafx.scene.control.ButtonType openLog = new javafx.scene.control.ButtonType("Ouvrir le log");
 					javafx.scene.control.ButtonType close = javafx.scene.control.ButtonType.CLOSE;
 					alert.getButtonTypes().setAll(openLog, close);

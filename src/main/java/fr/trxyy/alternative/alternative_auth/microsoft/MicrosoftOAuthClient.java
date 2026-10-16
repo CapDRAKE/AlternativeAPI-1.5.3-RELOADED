@@ -21,7 +21,28 @@ import fr.trxyy.alternative.alternative_auth.microsoft.model.MicrosoftModel;
 public class MicrosoftOAuthClient {
 
 	/* ===== Microsoft endpoints ===== */
-	private static final String CLIENT_ID = "33250748-fc1d-4053-825e-1e7b345d5d95";
+
+	/** Application Azure utilisée si le launcher n'en déclare pas une autre. */
+	public static final String DEFAULT_CLIENT_ID = "33250748-fc1d-4053-825e-1e7b345d5d95";
+
+	private static volatile String clientId = DEFAULT_CLIENT_ID;
+
+	/**
+	 * Déclare l'application Azure du launcher (à appeler une fois au démarrage, avant
+	 * toute connexion). Les jetons enregistrés sont liés à l'application qui les a
+	 * émis : après un changement, le joueur doit se reconnecter.
+	 *
+	 * @param id l'identifiant d'application (client) Azure ; null ou vide rétablit
+	 *           l'application par défaut
+	 */
+	public static void setClientId(String id) {
+		clientId = (id == null || id.trim().isEmpty()) ? DEFAULT_CLIENT_ID : id.trim();
+	}
+
+	/** @return l'identifiant d'application Azure utilisé pour l'authentification */
+	public static String getClientId() {
+		return clientId;
+	}
 
 	private static final String DEVICE_CODE_URL =
 	        "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode";
@@ -61,7 +82,7 @@ public class MicrosoftOAuthClient {
     public DeviceCode requestDeviceCode() throws Exception {
 
         Map<String, String> body = new HashMap<>();
-        body.put("client_id", CLIENT_ID);
+        body.put("client_id", clientId);
         body.put("scope", SCOPE);
 
         String json = postForm(DEVICE_CODE_URL, body);
@@ -95,7 +116,7 @@ public class MicrosoftOAuthClient {
             Thread.sleep(code.getInterval() * 1000L);
 
             Map<String, String> body = new HashMap<>();
-            body.put("client_id", CLIENT_ID);
+            body.put("client_id", clientId);
             body.put("grant_type", "urn:ietf:params:oauth:grant-type:device_code");
             body.put("device_code", code.getDeviceCode());
 
@@ -166,7 +187,7 @@ public class MicrosoftOAuthClient {
     
     public MicrosoftModel refreshWithToken(String refreshToken) throws Exception {
         Map<String, String> body = new HashMap<>();
-        body.put("client_id", CLIENT_ID);
+        body.put("client_id", clientId);
         body.put("grant_type", "refresh_token");
         body.put("refresh_token", refreshToken);
         body.put("scope", SCOPE);

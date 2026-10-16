@@ -6,3 +6,6 @@
 .project
 AlternativeAPI.iml
 /target/
+
+# Logs produits par les installeurs Forge/NeoForge lancés depuis ce dossier
+*-installer.jar.log

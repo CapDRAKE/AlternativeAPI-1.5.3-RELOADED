@@ -65,9 +65,11 @@ public class AuthConstants {
     /**
      * Champs des reponses d'authentification qui ne doivent JAMAIS apparaitre dans
      * les journaux : ils donnent un acces complet au compte Microsoft/Minecraft.
+     * device_code en fait partie : qui le detient peut recuperer les jetons des que
+     * le joueur a valide la connexion (le user_code, lui, est affiche au joueur).
      */
     private static final String[] SECRET_FIELDS = {
-            "access_token", "refresh_token", "id_token", "accessToken", "Token"
+            "access_token", "refresh_token", "id_token", "accessToken", "Token", "device_code"
     };
 
     /**

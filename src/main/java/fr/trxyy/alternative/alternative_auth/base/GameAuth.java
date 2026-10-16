@@ -27,6 +27,7 @@ import java.awt.*;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 /**
@@ -46,8 +47,19 @@ public class GameAuth {
         if (type == AccountType.MOJANG) {
             connectMinecraft(user, pwd);
         } else if (type == AccountType.OFFLINE) {
-            setSession(user, TokenGenerator.generateToken(user), UUID.randomUUID().toString().replace("-", ""));
+            setSession(user, TokenGenerator.generateToken(user), offlineUuid(user));
         }
+    }
+
+    /**
+     * UUID hors ligne standard de Minecraft, celui qu'un serveur en online-mode=false
+     * attribue au pseudo. Il doit rester le même d'une session à l'autre : le jeu range
+     * les progrès et statistiques du joueur par UUID (un UUID aléatoire les faisait
+     * repartir de zéro à chaque connexion).
+     */
+    public static String offlineUuid(String username) {
+        byte[] seed = ("OfflinePlayer:" + username).getBytes(StandardCharsets.UTF_8);
+        return UUID.nameUUIDFromBytes(seed).toString().replace("-", "");
     }
 
     public GameAuth(AccountType type) {

@@ -86,6 +86,14 @@ public class GameVerifier {
 
 			String relativePath = file.getAbsolutePath().replace(gameDirAbs, "");
 
+			// delete forcé : demande explicite du serveur, prioritaire sur la protection
+			// des données utilisateur (sinon un mod retiré du serveur ne pourrait jamais
+			// être supprimé de mods/).
+			if (existInDeleteList(relativePath)) {
+				FileUtil.deleteSomething(file.getAbsolutePath());
+				continue;
+			}
+
 			// Protège les données utilisateur du dossier de jeu (options, serveurs, saves, etc.)
 			if (isProtectedUserData(relativePath)) {
 				continue;
@@ -110,12 +118,6 @@ public class GameVerifier {
 
 			// ne touche pas à downloads.xml
 			if (file.getAbsolutePath().endsWith("downloads.xml")) {
-				continue;
-			}
-
-			// delete forcé
-			if (existInDeleteList(relativePath)) {
-				FileUtil.deleteSomething(file.getAbsolutePath());
 				continue;
 			}
 
@@ -273,8 +275,15 @@ public class GameVerifier {
 	 */
 	public boolean existInDeleteList(String search) {
 		if (isBlank(search)) return false;
+		// Correspondance exacte de fin de chemin (et non "contient") : une entrée
+		// "mods/monmod.jar.old" ne doit pas désigner "mods/monmod.jar". Les entrées
+		// sont stockées en absolu (dossier du jeu + chemin), search est relatif.
+		String normalizedSearch = normalizeSeparators(search);
+		if (!normalizedSearch.startsWith(File.separator)) {
+			normalizedSearch = File.separator + normalizedSearch;
+		}
 		for (String str : this.deleteList) {
-			if (str != null && str.trim().contains(search)) {
+			if (str != null && normalizeSeparators(str.trim()).endsWith(normalizedSearch)) {
 				return true;
 			}
 		}

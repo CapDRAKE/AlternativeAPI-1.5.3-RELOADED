@@ -264,6 +264,11 @@ public class GameUpdater extends Thread {
             Logger.log("Updating Local Minecraft Version.");
             Logger.log("========================================");
             this.downloadVersion();
+            if (this.hasDownloadError()) {
+                Logger.err("Launch cancelled: unable to download the version JSON.");
+                this.setCurrentInfoText("Impossible de recuperer la version du jeu.");
+                return;
+            }
 
             this.verifier = new GameVerifier(this.engine);
             Logger.log("Getting ignore/delete list   [Step 1/6]");
@@ -560,8 +565,10 @@ public class GameUpdater extends Thread {
                 }
             }
         } catch (Exception e) {
+            // Plus de System.exit : le launcher se fermait sans aucun message. L'échec est
+            // signalé par hasDownloadError() et run() s'arrête sans lancer le jeu.
             e.printStackTrace();
-            System.exit(0);
+            this.registerDownloadFailure(theFile, this.engine.getGameLinks().getJsonUrl(), e);
         }
     }
 
@@ -1579,8 +1586,12 @@ public class GameUpdater extends Thread {
         }
 
         if (this.engine.getGameForge() == null) {
+            // Échec signalé par hasDownloadError() (le jeu n'est pas lancé), au lieu de
+            // fermer brutalement le launcher.
             Logger.err("No forge version found");
-            System.exit(3);
+            File marker = new File(engine.getGameFolder().getCacheDir(), "forge.json");
+            this.registerDownloadFailure(marker, "forge metadata", new IOException("No forge version found"));
+            return;
         }
 
         for (Forge1_17_HigherLibrary lib : this.engine.getGameForge().getLibraries()) {
@@ -2607,6 +2618,12 @@ public class GameUpdater extends Thread {
 
     /**
      * Update custom jars
+     *
+     * GameParser ne place dans files que les fichiers absents ou dont la taille ou le
+     * MD5 diffère de la liste du serveur : on les télécharge donc sans autre condition.
+     * Ne pas repasser par Downloader.requireUpdate() : sans SHA1, il considère tout
+     * fichier existant comme à jour, et un fichier modifié sur le serveur sous le même
+     * nom n'était alors jamais retéléchargé.
      */
     private void updateCustomJars() {
         for (Map.Entry<String, LauncherFile> entry : this.files.entrySet()) {
@@ -2618,9 +2635,7 @@ public class GameUpdater extends Thread {
 
             if (!verifier.existInDeleteList(
                     libPath.getAbsolutePath().replace(engine.getGameFolder().getGameDir().getAbsolutePath(), ""))) {
-                if (customDownloadTask.requireUpdate()) {
-                    this.customJarsExecutor.submit(customDownloadTask);
-                }
+                this.customJarsExecutor.submit(customDownloadTask);
             }
         }
     }
