@@ -3,17 +3,19 @@ package fr.trxyy.alternative.alternative_auth.base;
 import fr.trxyy.alternative.alternative_api.GameEngine;
 import fr.trxyy.alternative.alternative_auth.account.AccountType;
 import fr.trxyy.alternative.alternative_auth.account.Session;
+import fr.trxyy.alternative.alternative_auth.microsoft.MicrosoftBrowserAuth;
 import fr.trxyy.alternative.alternative_auth.microsoft.MicrosoftXboxAuth;
 import fr.trxyy.alternative.alternative_auth.microsoft.MicrosoftOAuthClient;
-import fr.trxyy.alternative.alternative_auth.microsoft.MicrosoftOAuthClient.DeviceCode;
 import fr.trxyy.alternative.alternative_auth.microsoft.model.MicrosoftModel;
 import fr.trxyy.alternative.alternative_auth.mojang.model.MojangAuthResult;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
-import javafx.scene.layout.StackPane;
 import javafx.scene.layout.Pane;
+import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -29,6 +31,8 @@ import java.io.InputStreamReader;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
  * GameAuth
@@ -69,71 +73,73 @@ public class GameAuth {
     /*──────────────────────  Auth Microsoft  ──────────────────────*/
 
     public void connectMicrosoft(GameEngine engine, Pane root) {
+        connectMicrosoft(engine, root, null);
+    }
+
+    /**
+     * Connexion Microsoft tout-en-un : reconnexion silencieuse si des jetons sont
+     * enregistrés, sinon connexion dans le navigateur du joueur (MicrosoftBrowserAuth).
+     * Une petite fenêtre d'attente reste affichée pendant ce temps ; la fermer annule.
+     *
+     * @param onFinished appelé sur le thread JavaFX à la fin : true si connecté
+     *                   (getSession() est alors renseignée), false sinon. Peut être null.
+     */
+    public void connectMicrosoft(GameEngine engine, Pane root, Consumer<Boolean> onFinished) {
         this.authConfig = new AuthConfig(engine);
+        final MicrosoftBrowserAuth browserAuth = new MicrosoftBrowserAuth();
 
         ProgressIndicator spinner = new ProgressIndicator();
-        spinner.setPrefSize(80, 80);
-        StackPane content = new StackPane(spinner);
+        spinner.setPrefSize(48, 48);
+        Label message = new Label("Termine la connexion dans ton navigateur…");
+        message.setWrapText(true);
+        VBox content = new VBox(16, spinner, message);
+        content.setAlignment(Pos.CENTER);
         content.setPadding(new Insets(20));
 
         Stage dlg = new Stage();
-        dlg.setScene(new Scene(content, 300, 160));
+        dlg.setScene(new Scene(content, 340, 170));
         dlg.setTitle("Connexion Microsoft");
         dlg.initModality(Modality.APPLICATION_MODAL);
         dlg.setResizable(false);
+        // Fermer la fenêtre abandonne la connexion en cours.
+        dlg.setOnCloseRequest(e -> browserAuth.cancel());
         dlg.show();
 
         new Thread(() -> {
             try {
                 /* ===================== SILENT LOGIN ===================== */
                 if (trySilentRefresh(engine)) {
-                    Platform.runLater(() -> dlg.close());
+                    Platform.runLater(() -> finish(true, dlg, onFinished));
                     return;
                 }
 
-                /* ===================== DEVICE FLOW ===================== */
-                MicrosoftOAuthClient deviceAuth = new MicrosoftOAuthClient();
+                /* ===================== CONNEXION DANS LE NAVIGATEUR ===================== */
+                String url = browserAuth.start();
+                Desktop.getDesktop().browse(URI.create(url));
+                MicrosoftModel model = browserAuth.awaitTokens(5, TimeUnit.MINUTES);
 
-                // 1️⃣ Récupération du device code
-                DeviceCode deviceCode = deviceAuth.requestDeviceCode();
-
-                // 2️⃣ Ouvre la page Microsoft officielle
-                Desktop.getDesktop().browse(
-                        URI.create(deviceCode.getVerificationUri())
-                );
-
-                // 3️⃣ Affiche le code à l’utilisateur (UI à toi)
-                Platform.runLater(() -> {
-                    Logger.log("Code Microsoft : " + deviceCode.getUserCode());
-                    // 👉 idéalement : popup / label visible
-                });
-
-                // 4️⃣ Polling jusqu’à validation
-                MicrosoftModel model = deviceAuth.pollForToken(deviceCode);
-
-                // 5️⃣ Sauvegarde tokens
                 authConfig.createConfigFile(model);
-
-                // 6️⃣ Chaîne Xbox → XSTS → Minecraft
                 Session res = new MicrosoftXboxAuth().getLiveToken(model.getAccess_token());
+                setSession(res.getUsername(), res.getToken(), res.getUuid());
+                Platform.runLater(() -> finish(true, dlg, onFinished));
 
-                Platform.runLater(() -> success(res, dlg));
-
+            } catch (MicrosoftBrowserAuth.LoginCancelledException e) {
+                Logger.log("Connexion Microsoft annulée");
+                this.isAuthenticated = false;
+                Platform.runLater(() -> finish(false, dlg, onFinished));
             } catch (Exception e) {
                 e.printStackTrace();
-                Platform.runLater(() -> error(dlg));
+                this.isAuthenticated = false;
+                Platform.runLater(() -> finish(false, dlg, onFinished));
             }
-        }).start();
+        }, "AlternativeAuth-Microsoft").start();
     }
 
-    private void success(Session session, Stage dlg) {
-        setSession(session.getUsername(), session.getToken(), session.getUuid());
+    private static void finish(boolean connected, Stage dlg, Consumer<Boolean> onFinished) {
         dlg.close();
-    }
-
-    private void error(Stage dlg) {
-        this.isAuthenticated = false;
-        dlg.close();
+        if (onFinished != null) {
+            onFinished.accept(connected);
+        }
     }
 
     /*──────────────────  Auth Mojang (inchangée)  ──────────────────*/

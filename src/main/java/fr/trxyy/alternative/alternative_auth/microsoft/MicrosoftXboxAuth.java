@@ -40,6 +40,12 @@ public class MicrosoftXboxAuth {
     private static final String SCOPE = "XboxLive.signin offline_access";
 
     /*──────────────────── URL d’autorisation ────────────────────*/
+    /**
+     * @deprecated Ancien flux Live ID reposant sur l'identifiant de l'application
+     *             officielle de Mojang, qu'un launcher tiers ne doit pas utiliser.
+     *             Utiliser MicrosoftBrowserAuth (ou le code d'appareil de MicrosoftOAuthClient).
+     */
+    @Deprecated
     public String getAuthorizationUrl(String state) {
         try {
             StringBuilder sb = new StringBuilder(AUTH_URL)
@@ -55,6 +61,8 @@ public class MicrosoftXboxAuth {
     }
 
     /*────────────────── code ↔ access_token ──────────────────*/
+    /** @deprecated voir getAuthorizationUrl */
+    @Deprecated
     public MicrosoftModel getAuthorizationCode(ParamType type, String code) throws Exception {
         Map<Object,Object> body = new HashMap<>();
         body.put("client_id", CLIENT_ID);

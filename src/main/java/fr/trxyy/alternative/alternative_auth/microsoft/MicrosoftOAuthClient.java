@@ -142,6 +142,53 @@ public class MicrosoftOAuthClient {
         }
     }
 
+    /* ===================== CONNEXION PAR NAVIGATEUR ===================== */
+
+    /**
+     * Échange le code reçu après une connexion dans le navigateur (voir
+     * MicrosoftBrowserAuth) contre les jetons Microsoft.
+     *
+     * @param code         le code d'autorisation renvoyé par Microsoft
+     * @param redirectUri  exactement l'adresse de retour utilisée pour la demande
+     * @param codeVerifier le secret PKCE dont le défi a accompagné la demande
+     */
+    public MicrosoftModel exchangeAuthorizationCode(String code, String redirectUri, String codeVerifier) throws Exception {
+        Map<String, String> body = new HashMap<>();
+        body.put("client_id", clientId);
+        body.put("grant_type", "authorization_code");
+        body.put("code", code);
+        body.put("redirect_uri", redirectUri);
+        body.put("code_verifier", codeVerifier);
+        body.put("scope", SCOPE);
+
+        String json = postForm(TOKEN_URL, body);
+        if (json == null || json.isEmpty())
+            throw new IllegalStateException("Réponse vide de Microsoft /token");
+
+        JSONObject o = (JSONObject) new JSONParser().parse(json);
+        if (!o.containsKey("access_token")) {
+            throw new IllegalStateException("Microsoft token error : "
+                    + o.get("error") + " – " + o.get("error_description"));
+        }
+        return AuthConstants.getGson().fromJson(json, MicrosoftModel.class);
+    }
+
+    /** @return l'adresse de la page de connexion Microsoft pour ces paramètres */
+    static String buildAuthorizeUrl(String redirectUri, String state, String codeChallenge) throws Exception {
+        return AuthConstants.MICROSOFT_BASE_URL
+                + "?client_id=" + URLEncoder.encode(clientId, "UTF-8")
+                + "&response_type=code"
+                + "&response_mode=query"
+                + "&redirect_uri=" + URLEncoder.encode(redirectUri, "UTF-8")
+                + "&scope=" + URLEncoder.encode(SCOPE, "UTF-8")
+                + "&state=" + URLEncoder.encode(state, "UTF-8")
+                + "&code_challenge=" + URLEncoder.encode(codeChallenge, "UTF-8")
+                + "&code_challenge_method=S256"
+                // Laisse toujours choisir le compte : indispensable pour changer de compte
+                // quand le navigateur est déjà connecté à un autre compte Microsoft.
+                + "&prompt=select_account";
+    }
+
     /* ===================== HTTP FORM ===================== */
 
     private static String postForm(String endpoint, Map<String, String> params) throws Exception {

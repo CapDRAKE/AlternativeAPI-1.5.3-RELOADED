@@ -7,6 +7,11 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.concurrent.CompletableFuture;
 
+/**
+ * @deprecated Port fixe et réponse non vérifiée (pas de state) : utiliser
+ *             {@link fr.trxyy.alternative.alternative_auth.microsoft.MicrosoftBrowserAuth}.
+ */
+@Deprecated
 public class LocalHttpReceiver {
 
     private final HttpServer server;

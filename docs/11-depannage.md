@@ -72,11 +72,17 @@ listez le fichier dans [`delete.json`](08-serveur-de-fichiers.md#deletejson--fic
 
 ## Authentification Microsoft
 
-**Le joueur ne voit pas de code à saisir**
-`GameAuth.connectMicrosoft(...)` n'affiche pas le code. Utilisez
-[l'implémentation recommandée](06-authentification.md#implémentation-recommandée).
+**La page Microsoft affiche « The provided value for the input parameter 'redirect_uri' is not valid »**
+Votre application Azure ne déclare pas l'adresse de retour `http://localhost`. Voir
+[Réglage Azure nécessaire](06-authentification.md#réglage-azure-nécessaire).
 
-**La connexion échoue après la saisie du code**
+**Après la connexion, le navigateur affiche « Ce site est inaccessible » sur `localhost`**
+Le launcher n'attendait plus le retour : connexion annulée ou délai dépassé, ou
+launcher fermé entre-temps. Relancez la connexion. Si le problème persiste sur une
+machine précise (logiciel de sécurité qui bloque les connexions locales), proposez le
+[code d'appareil](06-authentification.md#code-dappareil-secours).
+
+**La connexion échoue une fois le compte validé**
 Le compte ne possède probablement pas Minecraft, ou c'est un compte mineur sans
 autorisation Xbox. Le détail est dans l'exception et la console.
 
@@ -105,7 +111,7 @@ Récapitulatif des comportements à connaître, détaillés dans les chapitres c
 |---|---|
 | Fichiers personnalisés | Ignorés avec `VANILLA`, `VANILLA_1_19_HIGHER`, les styles Forge et `OPTIFINE` |
 | Nettoyage | Les fichiers retirés du serveur restent dans les dossiers protégés tant qu'ils ne sont pas listés dans `delete.json` ; `delete.json` ne supprime pas de dossiers entiers |
-| Microsoft | `connectMicrosoft` n'affiche pas le code |
+| Microsoft | `connectMicrosoft` ne propose pas le code d'appareil en secours |
 | Microsoft | Jetons stockés dans `%APPDATA%\authconfig\`, partagés entre launchers ; dossier relatif hors Windows |
 | Mémoire | 1 à 10 Go uniquement ; un `-Xmx` passé en argument JVM est écrasé |
 | Forge | Version de Forge non configurable (recommandée, sinon la plus récente) |

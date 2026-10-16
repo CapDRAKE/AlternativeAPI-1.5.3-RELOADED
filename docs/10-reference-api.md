@@ -206,7 +206,8 @@ Composants (`alternative_api_ui.components`), détaillés dans [Interface](07-in
 | `trySilentRefresh(GameEngine)` | Reconnexion Microsoft avec les jetons enregistrés. Bloquant. `true` si réussi |
 | `logout(GameEngine)` | Vide la session et supprime les jetons enregistrés |
 | `getSession()`, `setSession(Session)`, `isLogged()` | Session courante |
-| `connectMicrosoft(GameEngine, Pane)` | Connexion tout-en-un, **n'affiche pas le code** : voir [Authentification](06-authentification.md#gameauthconnectmicrosoftengine-root) |
+| `connectMicrosoft(GameEngine, Pane, Consumer<Boolean>)` | Connexion tout-en-un (reconnexion silencieuse, sinon navigateur) ; le rappel reçoit `true` si connecté. Voir [Authentification](06-authentification.md#méthode-tout-en-un--gameauthconnectmicrosoft) |
+| `connectMicrosoft(GameEngine, Pane)` | Idem, sans rappel |
 
 ### `base.AuthConfig`
 
@@ -217,14 +218,27 @@ Composants (`alternative_api_ui.components`), détaillés dans [Interface](07-in
 | `canRefresh()` | Des jetons sont enregistrés |
 | `deleteConfigFile()` | Supprime les jetons |
 
+### `microsoft.MicrosoftBrowserAuth`
+
+Connexion dans le navigateur (une instance par tentative), voir
+[Authentification](06-authentification.md#connexion-dans-le-navigateur-recommandée).
+
+| Membre | Description |
+|---|---|
+| `setLauncherName(String)` | Nom affiché sur la page de confirmation du navigateur |
+| `start()` | Démarre le serveur local sur un port libre, renvoie l'adresse de la page de connexion Microsoft à ouvrir |
+| `awaitTokens(long, TimeUnit)` | Attend le retour du navigateur et renvoie un `MicrosoftModel`. Bloquant. Lève `LoginCancelledException` (refus ou `cancel()`) ou `TimeoutException` |
+| `cancel()` | Abandonne la connexion et arrête le serveur local |
+
 ### `microsoft.MicrosoftOAuthClient`
 
 | Membre | Description |
 |---|---|
 | `static setClientId(String)` / `static getClientId()` | Application Azure utilisée par toute la lib ; `null` rétablit la valeur par défaut |
 | `DEFAULT_CLIENT_ID` | Application Azure par défaut (celle du mainteneur de la lib) |
-| `requestDeviceCode()` | Renvoie un `DeviceCode` : `getUserCode()`, `getVerificationUri()`, `getExpiresIn()`, `getInterval()`, `getDeviceCode()` |
-| `pollForToken(DeviceCode)` | Attend la validation par le joueur, renvoie un `MicrosoftModel`. Bloquant |
+| `requestDeviceCode()` | Code d'appareil : renvoie un `DeviceCode` (`getUserCode()`, `getVerificationUri()`, `getExpiresIn()`, `getInterval()`, `getDeviceCode()`) |
+| `pollForToken(DeviceCode)` | Attend la validation du code par le joueur, renvoie un `MicrosoftModel`. Bloquant |
+| `exchangeAuthorizationCode(code, redirectUri, codeVerifier)` | Échange un code de connexion contre les jetons (utilisé par `MicrosoftBrowserAuth`) |
 | `refreshWithToken(String refreshToken)` | Renouvelle les jetons |
 
 ### `microsoft.MicrosoftXboxAuth`
