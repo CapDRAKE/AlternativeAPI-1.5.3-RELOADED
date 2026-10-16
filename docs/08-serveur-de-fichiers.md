@@ -117,22 +117,28 @@ finissent par `/`, les lignes commençant par `#` sont des commentaires.
 ```json
 {
   "files": [
-    "bin/game/monserveur/journeymap/ancienne-config.txt"
+    "bin/game/monserveur/mods/monmod-1.1.jar",
+    "bin/game/monserveur/journeymap/ancienne-config.txt",
+    "libraries/com/google/guava/guava/15.0/guava-15.0.jar"
   ]
 }
 ```
 
-Supprime ces fichiers à chaque lancement, **même s'ils sont dans un dossier ignoré** et
-même si la lib les a installés (un fichier personnalisé listé ici n'est pas non plus
-téléchargé).
+Chaque entrée est un chemin de fichier complet depuis la racine du dossier du jeu (pas
+de dossiers entiers). L'effet dépend de l'emplacement :
 
-Limites :
+- **dans `bin/`** : le fichier est supprimé à chaque lancement, **y compris dans les
+  dossiers protégés** (`mods/`, `config/`…) et dans les dossiers ignorés. C'est le moyen
+  de retirer un mod de chez vos joueurs après l'avoir retiré du serveur ;
+- **une librairie (`libraries/...`)** : la lib **ne la télécharge pas**. Sert à écarter
+  une version de librairie en conflit (par exemple une ancienne Guava avec certaines
+  versions de Forge). Une copie déjà présente n'est pas supprimée ;
+- **un fichier personnalisé** listé ici n'est pas téléchargé.
 
-- seuls les fichiers de **`bin/`** sont concernés : une entrée `libraries/...` n'a
-  aucun effet ;
-- les dossiers **protégés** (`mods/`, `config/`, `saves/`, `resourcepacks/`…) ne sont
-  jamais touchés, **même par `delete.json`**. Un mod retiré de votre serveur reste donc
-  dans le dossier `mods/` des joueurs.
+La correspondance est exacte : `mods/monmod.jar.old` ne désigne pas `mods/monmod.jar`.
+
+> Les suppressions dans les dossiers protégés touchent les fichiers des joueurs :
+> ne listez que des fichiers que vous avez vous-même distribués.
 
 Ancien format accepté (`delete.cfg`) : une entrée par ligne.
 
@@ -218,20 +224,23 @@ réglage par défaut d'Apache et de la plupart des hébergements). Vérifiez en 
 Le MD5 est recalculé à chaque requête : pour un gros modpack, mettez la liste en cache
 ou générez un fichier XML statique lors de vos mises en ligne.
 
-### Comportement et limites actuelles
+### Mise à jour des fichiers
 
-- Un fichier **absent** chez le joueur est téléchargé. Les fichiers personnalisés sont
-  ensuite conservés par le nettoyage de `bin/`.
-- ⚠️ **Un fichier modifié sur le serveur sous le même nom n'est pas retéléchargé** chez
-  un joueur qui possède déjà l'ancienne version (testé sur AlternativeAPI 1.7.0). Pour
-  publier une nouvelle version d'un fichier, **changez son nom** (par exemple
-  `monmod-1.2.jar` au lieu de `monmod-1.1.jar`).
-- Un fichier retiré du serveur est supprimé par le nettoyage, **sauf dans les dossiers
-  protégés** (`mods/`, `config/`…, voir [`delete.json`](#deletejson--fichiers-à-supprimer)).
-  Combiné au point précédent, mettre à jour un mod en le renommant laisse l'ancienne
-  version dans `mods/` chez les joueurs existants.
-- Si l'URL `files/` ne répond pas correctement (erreur HTTP, réseau), la lib **ferme
-  l'application** (`System.exit`).
+- Un fichier **absent** chez le joueur, ou dont la taille ou le MD5 diffère de la liste,
+  est téléchargé. Modifier un fichier sur le serveur suffit donc à le mettre à jour chez
+  tous les joueurs ; un fichier inchangé n'est pas retéléchargé.
+- L'`ETag` doit être le **MD5** du fichier : sinon, le fichier est considéré comme
+  modifié et retéléchargé à chaque lancement.
+- Les fichiers personnalisés sont conservés par le nettoyage de `bin/`. Un fichier
+  retiré du serveur est supprimé par le nettoyage, **sauf dans les dossiers protégés**
+  (`mods/`, `config/`…) : pour ceux-là, ajoutez-le à
+  [`delete.json`](#deletejson--fichiers-à-supprimer). Exemple pour passer de
+  `monmod-1.1.jar` à `monmod-1.2.jar` : déposez le nouveau fichier dans `files/`,
+  retirez l'ancien et listez `bin/game/monserveur/mods/monmod-1.1.jar` dans
+  `delete.json`.
+- Si l'URL `files/` ne répond pas correctement (erreur HTTP, réseau), le jeu n'est pas
+  lancé : `hasDownloadError()` vaut `true` et l'URL apparaît dans
+  `getFailedDownloads()`.
 
 ---
 

@@ -25,7 +25,8 @@ updater.start();
 
 En ligne (l'hôte du JSON répond) :
 
-1. télécharge le JSON de la version dans `cache/` ;
+1. télécharge le JSON de la version dans `cache/` (en cas d'échec, s'arrête aussitôt
+   avec le message `Impossible de recuperer la version du jeu.`) ;
 2. lit les listes `ignore.json` / `delete.json` si elles sont configurées ;
 3. [Forge 1.13+] récupère les métadonnées Forge officielles ;
 4. indexe la version et les assets ;
@@ -121,7 +122,7 @@ Si Minecraft se termine avec un code d'erreur, la lib tente de réafficher le la
 et d'ouvrir une boîte de dialogue « Minecraft s'est fermé » proposant d'ouvrir le log.
 Cela ne fonctionne que si l'interface JavaFX est encore active (voir
 `setImplicitExit(false)` ci-dessus). Le texte de cette fenêtre est en français et
-mentionne le support MajestyCraft : il n'est pas personnalisable sans modifier la lib.
+n'est pas personnalisable sans modifier la lib.
 
 ### Temps de jeu
 

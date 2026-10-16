@@ -31,17 +31,15 @@ Session session = auth.getSession();
   en `online-mode=true` (la valeur par défaut) refusent ces sessions.
 - Pas de skin personnalisé : le jeu affiche un skin par défaut.
 
-### Utilisez un UUID stable
+### L'UUID du joueur
 
-La lib génère un **UUID aléatoire à chaque appel**. Minecraft range les progrès et les
-statistiques du joueur par UUID : avec un UUID différent à chaque session, ils
-sembleraient perdus. Remplacez-le par l'UUID hors ligne standard (celui qu'un serveur
-en `online-mode=false` attribue au pseudo) :
+La session reçoit l'**UUID hors ligne standard** de Minecraft, celui qu'un serveur en
+`online-mode=false` attribue au pseudo : il est toujours le même pour un pseudo donné,
+ce qui préserve les progrès et statistiques du joueur (rangés par UUID) d'une session à
+l'autre. Il est aussi disponible directement :
 
 ```java
-String uuid = UUID.nameUUIDFromBytes(("OfflinePlayer:" + pseudo).getBytes(StandardCharsets.UTF_8))
-        .toString().replace("-", "");
-session.setUuid(uuid);
+String uuid = GameAuth.offlineUuid("Steve");   // sans tirets
 ```
 
 ### Valider le pseudo
@@ -167,19 +165,27 @@ compte. Pour changer de compte : `logout`, puis une nouvelle connexion complète
   alors créé dans le **répertoire courant** du launcher.
 - Il contient un jeton de rafraîchissement, qui donne accès au compte Minecraft du
   joueur : ne le journalisez pas, ne le copiez pas ailleurs. La lib masque les jetons
-  dans ses propres logs.
+  (et le `device_code` de la connexion en cours) dans ses propres logs.
 
 ### L'application Azure utilisée
 
-La connexion Microsoft passe par une application enregistrée sur Microsoft Azure, dont
-l'identifiant (`CLIENT_ID`) est **fixé dans la lib** (`MicrosoftOAuthClient`). C'est
-celle du mainteneur d'AlternativeAPI : c'est son nom que le joueur verra sur la page
-de consentement Microsoft.
+La connexion Microsoft passe par une application enregistrée sur Microsoft Azure. Par
+défaut, la lib utilise celle du mainteneur d'AlternativeAPI
+(`MicrosoftOAuthClient.DEFAULT_CLIENT_ID`) : c'est son nom que le joueur verra sur la
+page de consentement Microsoft.
 
 Pour un launcher public, enregistrez votre propre application Azure (type « client
 public », flux d'appareil activé), demandez à Mojang l'accès à l'API Minecraft pour
-cette application, puis remplacez la constante `CLIENT_ID` dans
-`MicrosoftOAuthClient` et recompilez la lib.
+cette application, puis déclarez-la **au démarrage du launcher, avant toute
+connexion** :
+
+```java
+MicrosoftOAuthClient.setClientId("votre-identifiant-d-application-azure");
+```
+
+Ce réglage vaut pour toute la lib (connexion, reconnexion silencieuse,
+`connectMicrosoft`). Les jetons enregistrés sont liés à l'application qui les a émis :
+après un changement d'application, les joueurs doivent se reconnecter une fois.
 
 ### `GameAuth.connectMicrosoft(engine, root)`
 

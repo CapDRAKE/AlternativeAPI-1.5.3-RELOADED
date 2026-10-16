@@ -101,7 +101,8 @@ Faites hériter votre panneau d'`IScreen` pour profiter de ses utilitaires :
 | `drawBackgroundImage(engine, root, "fond.png")` | Image de fond étirée à la taille du launcher |
 | `drawAnimatedBackground(engine, root, "fond.mp4")` | Vidéo de fond en boucle |
 | `drawImage(engine, image, x, y, largeur, hauteur, root, Mover.DONT_MOVE)` | Ajoute une image. Avec `Mover.MOVE`, l'image se décale légèrement selon la position de la souris (effet de parallaxe) |
-| `loadImage(engine, "logo.png")` | Charge une image des ressources |
+| `loadImage(engine, "logo.png")` ou `loadImage("logo.png")` | Charge une image des ressources |
+| `playSound("clic.wav")` | Joue un son des ressources (WAV, MP3…). Un fichier introuvable est signalé dans la console, sans exception |
 | `drawRect(root, x, y, largeur, hauteur, couleur)` | Ajoute un rectangle coloré, le renvoie |
 | `openLink("https://...")` | Ouvre une page dans le navigateur |
 | `fadeIn(noeud, ms)` / `fadeOut(noeud, ms)` | Fondu d'apparition / de disparition |
@@ -117,10 +118,6 @@ public LauncherPanel(Pane root, GameEngine engine) {
 }
 ```
 
-> `loadImage(String)` et `playSound(String)` (sans le paramètre `engine`) ne trouvent
-> pas les ressources dans la version actuelle : utilisez `loadImage(engine, nom)`, et
-> pour un son, un `javafx.scene.media.MediaPlayer` (voir ci-dessous).
-
 ## Ressources (images, sons, polices)
 
 Les méthodes qui prennent un **nom de fichier** le cherchent dans le classpath, sous
@@ -135,14 +132,15 @@ src/main/resources/resources/
 └── police.ttf
 ```
 
-Un fichier introuvable provoque une exception au chargement : vérifiez le nom exact
+Une image introuvable provoque une exception au chargement : vérifiez le nom exact
 (sensible à la casse dans le jar).
 
-Pour jouer un son :
+Pour jouer un son depuis une classe qui n'hérite pas d'`IScreen` :
 
 ```java
 URL url = getClass().getResource("/resources/clic.mp3");
-new MediaPlayer(new Media(url.toExternalForm())).play();
+this.clic = new MediaPlayer(new Media(url.toExternalForm()));   // gardé dans un champ, sinon
+this.clic.play();                                               // le son peut être coupé
 ```
 
 Pour une police : `FontLoader.loadFont("police.ttf", "Nom De La Police", 16f)` charge le

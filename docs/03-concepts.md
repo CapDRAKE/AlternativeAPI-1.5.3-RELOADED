@@ -99,8 +99,8 @@ Tous ne sont pas obligatoires :
 - `ignore.json` et `delete.json` absents (erreur 404) : simplement ignorés ;
 - `status.json` : lu uniquement si vous activez la maintenance, il doit alors exister ;
 - `files/` : interrogé uniquement par les `GameStyle` qui gèrent les fichiers
-  personnalisés (voir [GameStyle](#gamestyle)). Il doit alors répondre, sinon la lib
-  **ferme l'application** (`System.exit`) ;
+  personnalisés (voir [GameStyle](#gamestyle)). Il doit alors répondre, sinon le jeu
+  n'est pas lancé (échec de téléchargement) ;
 - le JSON de version est toujours obligatoire.
 
 ### 3. URL par URL
@@ -124,8 +124,9 @@ acceptées (fichiers locaux).
   *dossier* du JSON (`getBaseUrl()`). Si elle échoue, elle passe en **mode hors ligne** :
   aucun téléchargement, lancement avec les fichiers déjà présents (s'ils existent).
 - **Si le JSON de version (ou la liste `files/`) ne peut pas être téléchargé alors que
-  l'hôte répond**, la lib appelle `System.exit(0)` : le launcher se ferme sans message.
-  Vérifiez vos URL ; la cause est affichée dans la console.
+  l'hôte répond** (erreur 404, 403…), le jeu n'est pas lancé : `hasDownloadError()`
+  vaut `true` et `getFailedDownloads()` indique l'URL en cause (voir
+  [Mise à jour et lancement](04-mise-a-jour-et-lancement.md#suivre-la-progression)).
 - On peut changer de `GameLinks` à tout moment avec `engine.reg(nouveauxLinks)`, par
   exemple quand le joueur choisit une autre version. Attention : `reg(GameLinks)`
   remet aussi à `null` les métadonnées Forge et `reg(GameConnect)` également.

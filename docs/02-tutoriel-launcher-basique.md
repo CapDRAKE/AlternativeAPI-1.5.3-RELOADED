@@ -250,10 +250,7 @@ options du jeu, démarrer le **`GameUpdater`**.
         }
 
         // Compte hors ligne : aucun mot de passe, aucune vérification de licence.
-        GameAuth auth = new GameAuth(username, "", AccountType.OFFLINE);
-        // UUID stable pour ce pseudo (voir plus bas)
-        Session session = auth.getSession();
-        session.setUuid(offlineUuid(username));
+        Session session = new GameAuth(username, "", AccountType.OFFLINE).getSession();
 
         // Options du jeu
         this.gameEngine.reg(GameMemory.RAM_2G);
@@ -275,24 +272,15 @@ options du jeu, démarrer le **`GameUpdater`**.
         this.progressTimeline.setCycleCount(Animation.INDEFINITE);
         this.progressTimeline.play();
     }
-
-    /** UUID hors ligne de Minecraft : celui qu'un serveur en online-mode=false attribue au pseudo. */
-    private static String offlineUuid(String username) {
-        byte[] seed = ("OfflinePlayer:" + username).getBytes(StandardCharsets.UTF_8);
-        return UUID.nameUUIDFromBytes(seed).toString().replace("-", "");
-    }
 ```
 
 Points importants :
 
 - **Compte hors ligne** : `GameAuth(pseudo, "", AccountType.OFFLINE)` fabrique une
-  session sans rien vérifier. Le joueur peut jouer en solo et sur les serveurs
+  session sans rien vérifier, avec l'UUID hors ligne standard de Minecraft (toujours le
+  même pour un pseudo donné). Le joueur peut jouer en solo et sur les serveurs
   configurés en `online-mode=false`. Pour les comptes Microsoft (achat du jeu vérifié),
   voir [Authentification](06-authentification.md).
-- **UUID stable** : en mode hors ligne, la lib attribue un UUID *aléatoire* à chaque
-  connexion. Or Minecraft range les progrès et statistiques du joueur par UUID : ils
-  sembleraient remis à zéro à chaque partie. On remplace donc l'UUID par l'UUID hors
-  ligne standard, toujours le même pour un pseudo donné.
 - **`engine.reg(...)`** : c'est ainsi qu'on donne au moteur ses réglages optionnels
   (mémoire, taille de fenêtre, serveur, arguments…). Voir [Options de jeu](05-options-de-jeu.md).
 - **Un `GameUpdater` par lancement** : c'est un `Thread`, il ne peut être démarré
@@ -343,9 +331,6 @@ le garder ouvert, voir [Mise à jour et lancement](04-mise-a-jour-et-lancement.m
 Les imports de `LauncherPanel` :
 
 ```java
-import java.nio.charset.StandardCharsets;
-import java.util.UUID;
-
 import fr.trxyy.alternative.alternative_api.GameEngine;
 import fr.trxyy.alternative.alternative_api.GameMemory;
 import fr.trxyy.alternative.alternative_api.GameSize;

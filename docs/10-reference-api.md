@@ -169,7 +169,7 @@ préférez votre propre fichier de configuration, dans votre dossier de jeu (hor
 |---|---|
 | `base.AlternativeBase` | Classe abstraite (`Application`) : `start(Stage)` |
 | `base.LauncherBase` | `LauncherBase(Stage, Scene, StageStyle, GameEngine)`, `setIconImage(Stage, String)`, `loadImage(engine, nom)` |
-| `base.IScreen` | `drawBackgroundImage(engine, root, nom)`, `drawAnimatedBackground(engine, root, nom)`, `drawImage(engine, image, x, y, l, h, root, Mover)`, `loadImage(engine, nom)`, `drawRect(root, x, y, l, h, Color)`, `openLink(url)`, `fadeIn(noeud, ms)`, `fadeOut(noeud, ms)` |
+| `base.IScreen` | `drawBackgroundImage(engine, root, nom)`, `drawAnimatedBackground(engine, root, nom)`, `drawImage(engine, image, x, y, l, h, root, Mover)`, `loadImage(engine, nom)`, `loadImage(nom)`, `playSound(nom)`, `drawRect(root, x, y, l, h, Color)`, `openLink(url)`, `fadeIn(noeud, ms)`, `fadeOut(noeud, ms)` |
 | `LauncherPane` | `LauncherPane(engine)`, `LauncherPane(engine, rayonDesCoins, WindowStyle)`, `setCorners(double)`, `setTransparent()` |
 | `LauncherAlert` | `LauncherAlert(message, AlertType)`, `LauncherAlert(message, details)` |
 | `LauncherBackground` | `LauncherBackground(engine, nom, root)` (image, ou vidéo `.mp4`/`.avi`/`.mov`) |
@@ -200,7 +200,8 @@ Composants (`alternative_api_ui.components`), détaillés dans [Interface](07-in
 
 | Membre | Description |
 |---|---|
-| `GameAuth(String pseudo, String motDePasse, AccountType.OFFLINE)` | Session hors ligne immédiate (UUID aléatoire) |
+| `GameAuth(String pseudo, String motDePasse, AccountType.OFFLINE)` | Session hors ligne immédiate, avec l'UUID hors ligne standard |
+| `static offlineUuid(String pseudo)` | UUID hors ligne standard de Minecraft pour ce pseudo (sans tirets) |
 | `GameAuth(AccountType)` | Objet vide, pour `trySilentRefresh` ou `connectMicrosoft` |
 | `trySilentRefresh(GameEngine)` | Reconnexion Microsoft avec les jetons enregistrés. Bloquant. `true` si réussi |
 | `logout(GameEngine)` | Vide la session et supprime les jetons enregistrés |
@@ -220,6 +221,8 @@ Composants (`alternative_api_ui.components`), détaillés dans [Interface](07-in
 
 | Membre | Description |
 |---|---|
+| `static setClientId(String)` / `static getClientId()` | Application Azure utilisée par toute la lib ; `null` rétablit la valeur par défaut |
+| `DEFAULT_CLIENT_ID` | Application Azure par défaut (celle du mainteneur de la lib) |
 | `requestDeviceCode()` | Renvoie un `DeviceCode` : `getUserCode()`, `getVerificationUri()`, `getExpiresIn()`, `getInterval()`, `getDeviceCode()` |
 | `pollForToken(DeviceCode)` | Attend la validation par le joueur, renvoie un `MicrosoftModel`. Bloquant |
 | `refreshWithToken(String refreshToken)` | Renouvelle les jetons |

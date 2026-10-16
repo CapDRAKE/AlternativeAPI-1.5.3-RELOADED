@@ -21,15 +21,16 @@ Réinstallez la lib (`mvn clean install`) puis reconstruisez votre launcher avec
 
 ## Au lancement
 
-**Le launcher se ferme sans message après le clic sur « Jouer »**
-La lib appelle `System.exit` si le JSON de version ou la liste `files/` ne peuvent pas
-être téléchargés alors que l'hôte répond (erreur 404, 403…). Vérifiez ces URL dans un
-navigateur ; l'erreur exacte est dans la console.
+**« Impossible de recuperer la version du jeu. »**
+Le JSON de version n'a pas pu être téléchargé alors que son hôte répond (erreur 404,
+403…). Vérifiez l'URL dans un navigateur ; elle figure dans
+`updater.getFailedDownloads()` et dans la console.
 
 **« Echec de telechargement de certaines librairies. »**
 `updater.hasDownloadError()` vaut `true` ; le détail est dans
-`updater.getFailedDownloads()` et la console. Souvent un problème réseau passager : un
-nouveau lancement ne retélécharge que les fichiers manquants.
+`updater.getFailedDownloads()` et la console. Causes : un problème réseau passager (un
+nouveau lancement ne retélécharge que les fichiers manquants), ou votre liste `files/`
+qui ne répond pas.
 
 **Rien ne se passe au deuxième clic sur « Jouer »**
 - Un `GameUpdater` ne peut être démarré qu'une fois (`IllegalThreadStateException`) :
@@ -61,17 +62,13 @@ La maintenance est activée mais `status.json` est introuvable. Voir
 C'est le [nettoyage de `bin/`](04-mise-a-jour-et-lancement.md#le-nettoyage-du-dossier-bin) :
 déclarez les dossiers concernés dans `ignore.json`.
 
-**Les progrès et statistiques d'un joueur hors ligne repartent de zéro**
-La lib attribue un UUID aléatoire à chaque connexion hors ligne : utilisez un
-[UUID stable](06-authentification.md#utilisez-un-uuid-stable).
-
-**Un fichier mis à jour sur mon serveur n'arrive pas chez les joueurs**
-Limite actuelle : un fichier personnalisé déjà présent n'est pas retéléchargé, même
-modifié. Changez son nom. Voir [Fichiers personnalisés](08-serveur-de-fichiers.md#comportement-et-limites-actuelles).
+**Un fichier personnalisé est retéléchargé à chaque lancement**
+L'`ETag` de votre liste `files/` n'est pas le MD5 du fichier. Voir
+[Format de la liste](08-serveur-de-fichiers.md#format-de-la-liste).
 
 **Un mod retiré de mon serveur reste chez les joueurs**
-Les dossiers protégés (`mods/`, `config/`…) ne sont jamais nettoyés, même par
-`delete.json`.
+Les dossiers protégés (`mods/`, `config/`…) ne sont pas nettoyés automatiquement :
+listez le fichier dans [`delete.json`](08-serveur-de-fichiers.md#deletejson--fichiers-à-supprimer).
 
 ## Authentification Microsoft
 
@@ -92,8 +89,7 @@ enregistrés.
 **Une image ne s'affiche pas / `IllegalArgumentException: input == null`**
 Le fichier n'est pas trouvé dans le classpath. Il doit être dans
 `src/main/resources/resources/` et appelé par son nom exact
-(`loadImage(engine, "logo.png")`). N'utilisez pas `loadImage(String)` ni
-`playSound(String)` d'`IScreen`, qui ne trouvent pas les ressources.
+(`loadImage(engine, "logo.png")`), sans le préfixe `resources/`.
 
 **Le launcher se fige**
 Un appel réseau ou une attente est exécuté dans le thread JavaFX. Déplacez-le dans un
@@ -107,16 +103,12 @@ Récapitulatif des comportements à connaître, détaillés dans les chapitres c
 
 | Domaine | Limite |
 |---|---|
-| Fichiers personnalisés | Un fichier modifié sur le serveur sous le même nom n'est pas retéléchargé |
-| Nettoyage | `delete.json` ne peut rien supprimer dans les dossiers protégés (`mods/`, `config/`…) ; il ne s'applique qu'à `bin/` |
 | Fichiers personnalisés | Ignorés avec `VANILLA`, `VANILLA_1_19_HIGHER`, les styles Forge et `OPTIFINE` |
-| Erreurs | `System.exit` si le JSON de version ou la liste `files/` ne peuvent pas être téléchargés |
-| Hors ligne | UUID aléatoire à chaque connexion |
-| Microsoft | `CLIENT_ID` Azure fixé dans la lib ; `connectMicrosoft` n'affiche pas le code |
+| Nettoyage | Les fichiers retirés du serveur restent dans les dossiers protégés tant qu'ils ne sont pas listés dans `delete.json` ; `delete.json` ne supprime pas de dossiers entiers |
+| Microsoft | `connectMicrosoft` n'affiche pas le code |
 | Microsoft | Jetons stockés dans `%APPDATA%\authconfig\`, partagés entre launchers ; dossier relatif hors Windows |
 | Mémoire | 1 à 10 Go uniquement ; un `-Xmx` passé en argument JVM est écrasé |
 | Forge | Version de Forge non configurable (recommandée, sinon la plus récente) |
-| Textes | Messages d'état, alertes et fenêtre de crash en français, non personnalisables ; la fenêtre de crash mentionne le support MajestyCraft |
-| Interface | `IScreen.loadImage(String)` et `IScreen.playSound(String)` ne trouvent pas les ressources ; `SwitchButton` n'expose pas son état |
+| Textes | Messages d'état, alertes et fenêtre de crash en français, non personnalisables |
+| Interface | `SwitchButton` n'expose pas son état |
 | Build | Chemin absolu vers `jfxrt.jar` dans le `pom.xml` |
-| Divers | La console affiche « Version: 1.6 » (constante `ApiConstants`) alors que l'artefact est en 1.7.0 |

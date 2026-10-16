@@ -1,8 +1,5 @@
 package com.exemple.launcher;
 
-import java.nio.charset.StandardCharsets;
-import java.util.UUID;
-
 import fr.trxyy.alternative.alternative_api.GameEngine;
 import fr.trxyy.alternative.alternative_api.GameMemory;
 import fr.trxyy.alternative.alternative_api.GameSize;
@@ -80,12 +77,7 @@ public class LauncherPanel extends IScreen {
 
         // Compte hors ligne : aucun mot de passe, aucune vérification de licence.
         // Utilisable en solo et sur les serveurs en online-mode=false.
-        GameAuth auth = new GameAuth(username, "", AccountType.OFFLINE);
-        // La lib tire un UUID au hasard à chaque connexion hors ligne. Or le jeu range
-        // les progrès et statistiques du joueur par UUID : on utilise donc l'UUID
-        // hors ligne standard, toujours le même pour un pseudo donné.
-        Session session = auth.getSession();
-        session.setUuid(offlineUuid(username));
+        Session session = new GameAuth(username, "", AccountType.OFFLINE).getSession();
 
         // Options du jeu : mémoire allouée et taille de la fenêtre de Minecraft.
         this.gameEngine.reg(GameMemory.RAM_2G);
@@ -107,12 +99,6 @@ public class LauncherPanel extends IScreen {
         this.progressTimeline = new Timeline(new KeyFrame(Duration.millis(200), event -> refreshProgress(updater)));
         this.progressTimeline.setCycleCount(Animation.INDEFINITE);
         this.progressTimeline.play();
-    }
-
-    /** UUID hors ligne de Minecraft : celui qu'un serveur en online-mode=false attribue au pseudo. */
-    private static String offlineUuid(String username) {
-        byte[] seed = ("OfflinePlayer:" + username).getBytes(StandardCharsets.UTF_8);
-        return UUID.nameUUIDFromBytes(seed).toString().replace("-", "");
     }
 
     private void refreshProgress(GameUpdater updater) {
