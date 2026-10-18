@@ -24,7 +24,7 @@ public enum EnumConfig {
 	PASSWORD("password", ""),
 	REMEMBER_ME("rememberme", false),
 	DATE("date", ""),
-	LANGUAGE("language","Fran�ais"),
+	LANGUAGE("language","Fran\u00e7ais"),
 	CFG_INCLUDE_SNAPSHOTS("CFG_INCLUDE_SNAPSHOTS", false);
 	
 	public String option;
