@@ -282,8 +282,7 @@ public class MinecraftLibrary {
         }
 
         if (classifier.contains("arm64") || classifier.contains("aarch64")) {
-            String osArch = System.getProperty("os.arch", "").toLowerCase();
-            return osArch.contains("arm") || osArch.contains("aarch64");
+            return OperatingSystem.isArm64Architecture();
         }
 
         if (classifier.contains("x86")) {

@@ -50,6 +50,13 @@ public class GameRunner {
 	public GameRunner(GameEngine gameEngine, Session account) {
 		this.engine = gameEngine;
 		this.session = account;
+		// Même choix d'architecture que la mise à jour (aussi en hors-ligne).
+		OperatingSystem.configureForMinecraft(gameEngine.getMinecraftVersion(),
+				gameEngine.getGameLinks() != null ? gameEngine.getGameLinks().getJsonName() : null);
+		if (fr.trxyy.alternative.alternative_api.updater.LinuxArmSupport.isLinuxArm()) {
+			// Aussi en hors-ligne : natives arm64 déjà téléchargées lors d'une mise à jour.
+			fr.trxyy.alternative.alternative_api.updater.LinuxArmSupport.substituteNatives(gameEngine.getMinecraftVersion(), false);
+		}
 		Logger.log("========================================");
 		Logger.log("Unpacking natives             [Step 5/7]");
 		Logger.log("========================================");
@@ -77,6 +84,16 @@ public class GameRunner {
         processBuilder.redirectInput(Redirect.INHERIT);
 		processBuilder.directory(engine.getGameFolder().getGameDir());
 		processBuilder.redirectErrorStream(true);
+		// Linux ARM hors Chromebook (Raspberry Pi...) : les pilotes Mesa annoncent souvent
+		// OpenGL 3.1 alors que Minecraft 1.17+ exige 3.2 ; ils savent en général faire
+		// tourner le jeu en 3.3. Les Chromebooks (virgl) annoncent déjà 4.x : rien à forcer.
+		if (fr.trxyy.alternative.alternative_api.updater.LinuxArmSupport.isLinuxArm() && !OperatingSystem.isChromeOS()) {
+			Map<String, String> env = processBuilder.environment();
+			if (!env.containsKey("MESA_GL_VERSION_OVERRIDE")) {
+				env.put("MESA_GL_VERSION_OVERRIDE", "3.3");
+				env.put("MESA_GLSL_VERSION_OVERRIDE", "330");
+			}
+		}
 
 		// Journalise la sortie du jeu dans un fichier (utile pour le support en cas
 		// de crash), tout en la laissant aussi visible dans la console du launcher.
@@ -124,6 +141,13 @@ public class GameRunner {
 	public static volatile java.util.function.LongConsumer gameSessionCallback;
 
 	/**
+	 * Callback optionnel invoqué quand le jeu se ferme sur une erreur (code de sortie,
+	 * journal de la session). Défini par le launcher pour afficher un diagnostic ;
+	 * s'il est null, une alerte générique propose d'ouvrir le journal.
+	 */
+	public static volatile java.util.function.BiConsumer<Integer, File> gameCrashCallback;
+
+	/**
 	 * Fichier de log de la session de jeu : &lt;gameDir&gt;/logs/latest-game.log.
 	 * Réinitialisé à chaque lancement. Null si le dossier ne peut être créé.
 	 */
@@ -146,6 +170,16 @@ public class GameRunner {
 	 * Tout est protégé — un souci ici ne doit jamais masquer le crash d'origine.
 	 */
 	private void onGameCrashed(int exitVal, File logFile) {
+		// Le launcher peut remplacer l'alerte générique par son propre diagnostic.
+		java.util.function.BiConsumer<Integer, File> crashCallback = gameCrashCallback;
+		if (crashCallback != null) {
+			try {
+				crashCallback.accept(exitVal, logFile);
+				return;
+			} catch (Throwable ignored) {
+				// repli sur l'alerte générique
+			}
+		}
 		try {
 			if (engine.getStage() == null) return;
 			Platform.runLater(() -> {
@@ -156,13 +190,17 @@ public class GameRunner {
 					alert.setTitle("Minecraft s'est fermé");
 					alert.setHeaderText("Le jeu s'est arrêté de façon inattendue (code " + exitVal + ").");
 					alert.setContentText("Un journal a été enregistré. Tu peux l'ouvrir pour comprendre le problème "
-							+ "ou le transmettre au support.");
+							+ "ou le transmettre au support."
+							+ (OperatingSystem.isChromeOS()
+									? "\n\nSur Chromebook : vérifie que l'accélération graphique de Linux est activée "
+											+ "(chrome://flags/#crostini-gpu-support), puis redémarre le Chromebook."
+									: ""));
 					javafx.scene.control.ButtonType openLog = new javafx.scene.control.ButtonType("Ouvrir le log");
 					javafx.scene.control.ButtonType close = javafx.scene.control.ButtonType.CLOSE;
 					alert.getButtonTypes().setAll(openLog, close);
 					java.util.Optional<javafx.scene.control.ButtonType> res = alert.showAndWait();
 					if (res.isPresent() && res.get() == openLog && logFile != null && logFile.isFile()) {
-						Desktop.getDesktop().open(logFile);
+						OperatingSystem.openFile(logFile);
 					}
 				} catch (Throwable ignored) {}
 			});
@@ -176,7 +214,7 @@ public class GameRunner {
 	@SuppressWarnings("deprecation")
 	public void openLink(String urlString) {
 		try {
-			Desktop.getDesktop().browse(new URL(urlString).toURI());
+			OperatingSystem.openLink(new URL(urlString).toURI());
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -213,7 +251,12 @@ public class GameRunner {
 
 		if (os.equals(OperatingSystem.OSX)) {
 			commands.add("-Xdock:name=Minecraft");
-			commands.add("-Xdock:icon=" + engine.getGameFolder().getAssetsDir() + "icons/minecraft.icns");
+			commands.add("-Xdock:icon=" + new File(engine.getGameFolder().getAssetsDir(), "icons" + File.separator + "minecraft.icns").getAbsolutePath());
+			// Sans cette option, LWJGL 3 (Minecraft 1.13+) plante au démarrage sur macOS.
+			// Elle vient normalement du JSON de version, mais pas de tous les profils moddés.
+			if (usesLwjgl3() && !commands.contains("-XstartOnFirstThread")) {
+				commands.add("-XstartOnFirstThread");
+			}
 		} else if (os.equals(OperatingSystem.WINDOWS)) {
 			if (!shouldSkipLegacyCmsGc() && !managedG1GcProfile) {
 				commands.add("-XX:+UseConcMarkSweepGC");
@@ -539,31 +582,35 @@ public class GameRunner {
 		}
 	}
 
+	private boolean usesLwjgl3() {
+		if (engine == null || engine.getMinecraftVersion() == null || engine.getMinecraftVersion().getLibraries() == null) {
+			return false;
+		}
+		for (MinecraftLibrary library : engine.getMinecraftVersion().getLibraries()) {
+			String name = library != null ? library.getName() : null;
+			if (name != null && name.startsWith("org.lwjgl:lwjgl:3")) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	private String findJavaBinaryInComponent(String component) {
 		if (component == null || component.trim().isEmpty() || engine == null || engine.getGameFolder() == null) {
 			return null;
 		}
 
-		File runtimeDir = new File(engine.getGameFolder().getBinDir(), component);
-		File[] candidates = new File[] {
-				new File(runtimeDir, "bin" + File.separator + "java.exe"),
-				new File(runtimeDir, "bin" + File.separator + "javaw.exe"),
-				new File(runtimeDir, "bin" + File.separator + "java")
-		};
-
-		for (File candidate : candidates) {
-			if (candidate.exists()) {
-				if (!OperatingSystem.isWindows() && !candidate.canExecute()) {
-					try {
-						candidate.setExecutable(true, false);
-					} catch (SecurityException ignored) {
-					}
-				}
-				return candidate.getAbsolutePath();
+		File candidate = OperatingSystem.findRuntimeJavaBinary(OperatingSystem.runtimeDirectory(engine.getGameFolder().getBinDir(), component));
+		if (candidate == null) {
+			return null;
+		}
+		if (!OperatingSystem.isWindows() && !candidate.canExecute()) {
+			try {
+				candidate.setExecutable(true, false);
+			} catch (SecurityException ignored) {
 			}
 		}
-
-		return null;
+		return candidate.getAbsolutePath();
 	}
 
 	private boolean shouldInjectMinecraftLoggingConfiguration() {

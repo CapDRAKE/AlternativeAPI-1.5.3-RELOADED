@@ -80,7 +80,7 @@ public class OSRestriction {
 		if (this.arch != null) {
 			try {
 				Pattern pattern = Pattern.compile(this.arch);
-				Matcher matcher = pattern.matcher(System.getProperty("os.arch"));
+				Matcher matcher = pattern.matcher(OperatingSystem.getEffectiveArch());
 				if (!matcher.matches())
 					return false;
 			} catch (Throwable throwable) {

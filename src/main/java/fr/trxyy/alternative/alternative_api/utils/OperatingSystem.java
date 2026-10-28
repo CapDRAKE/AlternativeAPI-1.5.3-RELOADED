@@ -7,6 +7,8 @@ import java.util.Arrays;
 import java.util.List;
 
 import fr.trxyy.alternative.alternative_api.GameEngine;
+import fr.trxyy.alternative.alternative_api.minecraft.json.MinecraftLibrary;
+import fr.trxyy.alternative.alternative_api.minecraft.json.MinecraftVersion;
 import fr.trxyy.alternative.alternative_api.minecraft.utils.Arch;
 
 /**
@@ -96,8 +98,8 @@ public enum OperatingSystem {
 			return getJavaPath();
 		}
 		String component = engine.getMinecraftVersion().getJavaVersion().getComponent();
-		File javaPath = new File(engine.getGameFolder().getBinDir(), component);
-		File javaBinary = resolveJavaBinary(javaPath, false);
+		File javaPath = runtimeDirectory(engine.getGameFolder().getBinDir(), component);
+		File javaBinary = findRuntimeJavaBinary(javaPath);
 		if (javaBinary == null) {
 			return new File(new File(javaPath, "bin"), isWindows() ? "java.exe" : "java").getAbsolutePath();
 		}
@@ -175,6 +177,16 @@ public enum OperatingSystem {
 	 * @param link The Url to open
 	 */
 	public static void openLink(final URI link) {
+		if (link == null) {
+			return;
+		}
+		if (getCurrentPlatform() != OperatingSystem.WINDOWS) {
+			// Linux / macOS : commande système (voir openFile pour la raison).
+			if (!openTarget(link.toString(), link)) {
+				Logger.log("Failed to open link " + link.toString());
+			}
+			return;
+		}
 		try {
 			final Class<?> desktopClass = Class.forName("java.awt.Desktop");
 			final Object o = desktopClass.getMethod("getDesktop", (Class[]) new Class[0]).invoke(null, new Object[0]);
@@ -263,13 +275,208 @@ public enum OperatingSystem {
 		return getCurrentPlatform() == OperatingSystem.OSX;
 	}
 
+	/**
+	 * Architecture utilisée pour le jeu : ARM 64 bits, sauf quand une version sans
+	 * natives ARM est lancée en x86_64 via Rosetta (voir configureForMinecraft).
+	 */
 	public static boolean isArm64Architecture() {
+		return !emulateX86_64 && isHostArm64();
+	}
+
+	/** Processeur réel de la machine (ARM 64 bits ?), indépendamment de Rosetta. */
+	public static boolean isHostArm64() {
 		String osArch = System.getProperty("os.arch", "");
 		if (osArch == null) {
 			return false;
 		}
 		String normalized = osArch.toLowerCase();
 		return normalized.contains("aarch64") || normalized.contains("arm64");
+	}
+
+	/** Architecture effective, au format de la propriété os.arch (règles des JSON de version). */
+	public static String getEffectiveArch() {
+		return emulateX86_64 ? "x86_64" : System.getProperty("os.arch", "");
+	}
+
+	// ------------------------------------------------------------------ Apple Silicon
+
+	private static volatile boolean emulateX86_64;
+
+	/**
+	 * Mac Apple Silicon : Minecraft ne fournit des natives ARM qu'à partir de la 1.19.
+	 * Les versions plus anciennes sont lancées, comme avec le launcher officiel, avec
+	 * le Java x86_64 de Mojang et les natives x86_64, exécutés par Rosetta 2. À appeler
+	 * avant de préparer les natives et le Java du jeu.
+	 */
+	public static void configureForMinecraft(MinecraftVersion version, String versionIdHint) {
+		boolean emulate = getCurrentPlatform() == OSX && isHostArm64() && !providesMacArm64Natives(version, versionIdHint);
+		if (emulate != emulateX86_64) {
+			Logger.log(emulate
+					? "Apple Silicon : version sans natives ARM, lancement en x86_64 via Rosetta 2."
+					: "Architecture native utilisée pour cette version.");
+		}
+		emulateX86_64 = emulate;
+	}
+
+	public static boolean isEmulatingX86_64() {
+		return emulateX86_64;
+	}
+
+	/**
+	 * Chromebook : le launcher tourne dans l'environnement Linux de ChromeOS
+	 * (conteneur « penguin », Crostini).
+	 */
+	public static boolean isChromeOS() {
+		return getCurrentPlatform() == LINUX
+				&& (new File("/dev/.cros_milestone").exists() || new File("/opt/google/cros-containers").exists());
+	}
+
+	/** Rosetta 2 installé (nécessaire au mode x86_64 sur Apple Silicon) ? */
+	public static boolean isRosettaInstalled() {
+		return new File("/Library/Apple/usr/libexec/oah/libRosettaRuntime").exists()
+				|| new File("/usr/libexec/rosetta/oahd").exists();
+	}
+
+	private static boolean providesMacArm64Natives(MinecraftVersion version, String versionIdHint) {
+		boolean sawLwjgl = false;
+		if (version != null && version.getLibraries() != null) {
+			for (MinecraftLibrary library : version.getLibraries()) {
+				if (library == null) {
+					continue;
+				}
+				String name = library.getName() == null ? "" : library.getName().toLowerCase();
+				if (name.contains("lwjgl")) {
+					sawLwjgl = true;
+				}
+				if (isMacArm64Native(name)) {
+					return true;
+				}
+				if (library.getDownloads() != null && library.getDownloads().getClassifiers() != null) {
+					for (String classifier : library.getDownloads().getClassifiers().keySet()) {
+						if (classifier != null && isMacArm64Native(classifier.toLowerCase())) {
+							return true;
+						}
+					}
+				}
+			}
+		}
+		if (sawLwjgl) {
+			// Bibliothèques connues et aucune native ARM : il faut le mode x86_64.
+			return false;
+		}
+		// Bibliothèques inconnues : on se fie au numéro de version (natives ARM dès 1.19).
+		Integer minor = minecraftMinorVersion(version != null ? version.getId() : null);
+		if (minor == null && version != null) {
+			minor = minecraftMinorVersion(version.getInheritsFrom());
+		}
+		if (minor == null) {
+			minor = minecraftMinorVersion(versionIdHint);
+		}
+		return minor == null || minor >= 19;
+	}
+
+	private static boolean isMacArm64Native(String lower) {
+		return lower.contains("macos-arm64") || lower.contains("osx-arm64")
+				|| lower.contains("macos-aarch64") || lower.contains("osx-aarch64");
+	}
+
+	private static Integer minecraftMinorVersion(String id) {
+		if (id == null) {
+			return null;
+		}
+		java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?:^|[^0-9.])1\\.(\\d{1,2})(?:[^0-9]|$)").matcher(id);
+		if (!m.find()) {
+			return null;
+		}
+		try {
+			return Integer.valueOf(m.group(1));
+		} catch (NumberFormatException e) {
+			return null;
+		}
+	}
+
+	// ------------------------------------------------------------------ runtimes Java
+
+	/** Dossier d'un runtime Java de Mojang (séparé en mode x86_64 pour ne pas mélanger les architectures). */
+	public static File runtimeDirectory(File binDir, String component) {
+		return new File(binDir, emulateX86_64 ? component + "-x86_64" : component);
+	}
+
+	/**
+	 * Binaire java d'un runtime Mojang : bin/java sous Windows et Linux,
+	 * jre.bundle/Contents/Home/bin/java sous macOS. Null s'il est introuvable.
+	 */
+	public static File findRuntimeJavaBinary(File runtimeDir) {
+		if (runtimeDir == null || !runtimeDir.isDirectory()) {
+			return null;
+		}
+		File[] homes = {
+				runtimeDir,
+				new File(runtimeDir, "jre.bundle" + File.separator + "Contents" + File.separator + "Home")
+		};
+		for (File home : homes) {
+			File binary = resolveJavaBinary(home, false);
+			if (binary != null) {
+				return binary;
+			}
+		}
+		// Dernier recours : un sous-dossier qui contient bin/java (ou Contents/Home/bin/java).
+		File[] children = runtimeDir.listFiles();
+		if (children != null) {
+			for (File child : children) {
+				if (!child.isDirectory()) {
+					continue;
+				}
+				File binary = resolveJavaBinary(child, false);
+				if (binary == null) {
+					binary = resolveJavaBinary(new File(child, "Contents" + File.separator + "Home"), false);
+				}
+				if (binary != null) {
+					return binary;
+				}
+			}
+		}
+		return null;
+	}
+
+	// ------------------------------------------------------------------ ouverture
+
+	/**
+	 * Ouvre un fichier ou un dossier avec l'application du système. Sous Linux,
+	 * xdg-open plutôt que java.awt.Desktop : en Java 8, Desktop charge GTK 2 alors
+	 * que JavaFX peut avoir chargé GTK 3, et les deux dans un même processus font
+	 * planter la JVM.
+	 */
+	public static boolean openFile(File file) {
+		if (file == null || !file.exists()) {
+			return false;
+		}
+		return openTarget(file.getAbsolutePath(), file.toURI());
+	}
+
+	private static boolean openTarget(String target, URI uri) {
+		OperatingSystem os = getCurrentPlatform();
+		if (os == LINUX || os == SOLARIS) {
+			return startCommand("xdg-open", target) || startCommand("gio", "open", target);
+		}
+		if (os == OSX) {
+			return startCommand("/usr/bin/open", target);
+		}
+		try {
+			java.awt.Desktop.getDesktop().browse(uri);
+			return true;
+		} catch (Throwable e) {
+			return startCommand("rundll32", "url.dll,FileProtocolHandler", target);
+		}
+	}
+
+	private static boolean startCommand(String... command) {
+		try {
+			new ProcessBuilder(command).start();
+			return true;
+		} catch (IOException e) {
+			return false;
+		}
 	}
 
 	public static boolean is32BitJvm() {

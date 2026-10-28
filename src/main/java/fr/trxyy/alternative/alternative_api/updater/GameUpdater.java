@@ -159,6 +159,29 @@ public class GameUpdater extends Thread {
     }
 
 
+    /**
+     * Prépare l'architecture du jeu pour cette version et refuse proprement les cas
+     * impossibles (message affiché dans la barre de progression du launcher) :
+     * - Linux ARM (Chromebooks ARM...) : natives LWJGL arm64 substituées, 1.19+ uniquement ;
+     * - Mac Apple Silicon, versions sans natives ARM (avant 1.19) : Rosetta 2 requis.
+     */
+    private boolean checkPlatformSupport() {
+        OperatingSystem.configureForMinecraft(this.minecraftVersion, resolveVersionId());
+        File marker = new File(engine.getGameFolder().getCacheDir(), "platform.unsupported");
+        if (LinuxArmSupport.isLinuxArm() && !LinuxArmSupport.substituteNatives(this.minecraftVersion, true)) {
+            this.registerDownloadFailure(marker, "linux-arm64", new Exception("Version sans natives ARM"));
+            this.setCurrentInfoText("Sur processeur ARM, choisis Minecraft 1.19 ou plus recent.");
+            return false;
+        }
+        if (OperatingSystem.isEmulatingX86_64() && !OperatingSystem.isRosettaInstalled()) {
+            Logger.err("Rosetta 2 est requis pour cette version sur Mac Apple Silicon.");
+            this.registerDownloadFailure(marker, "rosetta", new Exception("Rosetta 2 manquant"));
+            this.setCurrentInfoText("Installe Rosetta 2 : softwareupdate --install-rosetta");
+            return false;
+        }
+        return true;
+    }
+
     public void registerDownloadFailure(File file, String url, Exception e) {
         this.hasDownloadError = true;
         this.failedDownloads.add(file.getAbsolutePath() + " <- " + url + " (" + e.getClass().getSimpleName() + ": " + e.getMessage() + ")");
@@ -295,6 +318,9 @@ public class GameUpdater extends Thread {
             }
 
             this.indexVersion();
+            if (!this.checkPlatformSupport()) {
+                return;
+            }
             Logger.log("Indexing assets               [Step 3/6]");
             Logger.log("========================================");
 
@@ -488,6 +514,9 @@ public class GameUpdater extends Thread {
     private boolean downloadJavaManifestForComponent(String targetComponent) {
         if (targetComponent == null || targetComponent.trim().isEmpty()) {
             return false;
+        }
+        if (LinuxArmSupport.isLinuxArm()) {
+            return true; // Java pris chez Azul dans updateJavaComponent
         }
 
         String json = null;
@@ -1189,6 +1218,9 @@ public class GameUpdater extends Thread {
         }
 
         minecraftVersion = resolveVersionInheritance(JsonUtil.getGson().fromJson(json, MinecraftVersion.class), true);
+        if (LinuxArmSupport.isLinuxArm()) {
+            LinuxArmSupport.substituteNatives(minecraftVersion, true);
+        }
         engine.reg(minecraftVersion);
     }
 
@@ -1799,6 +1831,14 @@ public class GameUpdater extends Thread {
         if (targetComponent == null || targetComponent.trim().isEmpty()) {
             return;
         }
+        if (LinuxArmSupport.isLinuxArm()) {
+            this.setCurrentInfoText("Preparation de Java pour processeur ARM.");
+            if (!LinuxArmSupport.installRuntime(OperatingSystem.runtimeDirectory(engine.getGameFolder().getBinDir(), targetComponent), targetComponent)) {
+                File marker = new File(engine.getGameFolder().getCacheDir(), "java-arm.failed");
+                this.registerDownloadFailure(marker, "azul", new Exception("Java ARM indisponible"));
+            }
+            return;
+        }
         if (this.jvmManifest == null || this.jvmManifest.getFiles() == null) {
             return;
         }
@@ -1808,13 +1848,28 @@ public class GameUpdater extends Thread {
         }
 
         Map<String, JVMFile> objects = this.jvmManifest.getFiles();
+        // Les runtimes Linux et macOS contiennent des liens symboliques (pas de
+        // téléchargement associé) : ils sont recréés une fois les fichiers en place.
+        Map<File, String> links = new LinkedHashMap<File, String>();
         for (String javaFile : objects.keySet()) {
             JVMFile jvmFile = (JVMFile) objects.get(javaFile);
-            File localFolder = new File(engine.getGameFolder().getBinDir(), targetComponent);
+            File localFolder = OperatingSystem.runtimeDirectory(engine.getGameFolder().getBinDir(), targetComponent);
             localFolder.mkdirs();
             File local = new File(localFolder, javaFile);
 
+            if ("link".equals(jvmFile.getType())) {
+                if (jvmFile.getTarget() != null) {
+                    links.put(local, jvmFile.getTarget());
+                    GameVerifier.addToFileList(local.getAbsolutePath().replace(engine.getGameFolder().getCacheDir().getAbsolutePath(), "").replace('/', File.separatorChar));
+                }
+                continue;
+            }
+
             if (!jvmFile.getType().equals(EnumJavaFileType.DIRECTORY.getName())) {
+                if (jvmFile.getDownloads() == null || jvmFile.getDownloads().getRaw() == null) {
+                    Logger.log("Java runtime entry without download, skipped: " + javaFile);
+                    continue;
+                }
                 Downloader downloadTask = new Downloader(local, jvmFile.getDownloads().getRaw().getUrl().toString(), jvmFile.getDownloads().getRaw().getSha1(), engine);
                 GameVerifier.addToFileList(local.getAbsolutePath().replace(engine.getGameFolder().getCacheDir().getAbsolutePath(), "").replace('/', File.separatorChar));
                 if (downloadTask.requireUpdate()) {
@@ -1832,8 +1887,47 @@ public class GameUpdater extends Thread {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
+        createJavaRuntimeLinks(links);
         applyJavaFilePermissions(targetComponent, objects);
         Logger.log("Jre Update finished for component " + targetComponent + ".");
+    }
+
+    private void createJavaRuntimeLinks(Map<File, String> links) {
+        if (OperatingSystem.isWindows() || links == null || links.isEmpty()) {
+            return;
+        }
+        int created = 0;
+        for (Map.Entry<File, String> entry : links.entrySet()) {
+            java.nio.file.Path link = entry.getKey().toPath();
+            java.nio.file.Path target = java.nio.file.Paths.get(entry.getValue());
+            try {
+                if (link.getParent() != null) {
+                    java.nio.file.Files.createDirectories(link.getParent());
+                }
+                if (java.nio.file.Files.isSymbolicLink(link) && target.equals(java.nio.file.Files.readSymbolicLink(link))) {
+                    continue;
+                }
+                if (!java.nio.file.Files.isDirectory(link, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                    java.nio.file.Files.deleteIfExists(link);
+                }
+                java.nio.file.Files.createSymbolicLink(link, target);
+                created++;
+            } catch (Exception e) {
+                // Système de fichiers sans liens : copie du fichier visé.
+                try {
+                    java.nio.file.Path resolved = link.getParent().resolve(target).normalize();
+                    if (java.nio.file.Files.isRegularFile(resolved)) {
+                        java.nio.file.Files.copy(resolved, link, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                        created++;
+                    } else {
+                        Logger.log("Unable to create Java runtime link " + link + " -> " + target + ": " + e.getMessage());
+                    }
+                } catch (Exception copyError) {
+                    Logger.log("Unable to create Java runtime link " + link + " -> " + target + ": " + copyError.getMessage());
+                }
+            }
+        }
+        Logger.log("Java runtime links ready: " + created + "/" + links.size());
     }
 
     private void applyJavaFilePermissions(String targetComponent, Map<String, JVMFile> objects) {
@@ -1841,7 +1935,7 @@ public class GameUpdater extends Thread {
             return;
         }
 
-        File localFolder = new File(engine.getGameFolder().getBinDir(), targetComponent);
+        File localFolder = OperatingSystem.runtimeDirectory(engine.getGameFolder().getBinDir(), targetComponent);
         for (Map.Entry<String, JVMFile> entry : objects.entrySet()) {
             if (entry == null) {
                 continue;
@@ -1974,19 +2068,8 @@ public class GameUpdater extends Thread {
         if (component == null || component.trim().isEmpty() || this.engine == null || this.engine.getGameFolder() == null) {
             return null;
         }
-
-        File runtimeDir = new File(this.engine.getGameFolder().getBinDir(), component);
-        File[] candidates = new File[] {
-                new File(runtimeDir, "bin" + File.separator + "java.exe"),
-                new File(runtimeDir, "bin" + File.separator + "javaw.exe"),
-                new File(runtimeDir, "bin" + File.separator + "java")
-        };
-        for (File candidate : candidates) {
-            if (candidate.exists()) {
-                return candidate.getAbsolutePath();
-            }
-        }
-        return null;
+        File binary = OperatingSystem.findRuntimeJavaBinary(OperatingSystem.runtimeDirectory(this.engine.getGameFolder().getBinDir(), component));
+        return binary != null ? binary.getAbsolutePath() : null;
     }
 
 
@@ -2006,7 +2089,7 @@ public class GameUpdater extends Thread {
 
         try {
             Logger.log("Refreshing Java component for Forge installer: " + component);
-            File runtimeDir = new File(this.engine.getGameFolder().getBinDir(), component);
+            File runtimeDir = OperatingSystem.runtimeDirectory(this.engine.getGameFolder().getBinDir(), component);
             deleteRecursively(runtimeDir);
             if (downloadJavaManifestForComponent(component)) {
                 updateJavaComponent(component);
@@ -2214,6 +2297,9 @@ public class GameUpdater extends Thread {
             e.printStackTrace();
         } finally {
             minecraftVersion = resolveVersionInheritance((MinecraftVersion) JsonUtil.getGson().fromJson(json, MinecraftVersion.class), true);
+            if (LinuxArmSupport.isLinuxArm()) {
+                LinuxArmSupport.substituteNatives(minecraftVersion, true);
+            }
             engine.reg(minecraftVersion);
         }
     }

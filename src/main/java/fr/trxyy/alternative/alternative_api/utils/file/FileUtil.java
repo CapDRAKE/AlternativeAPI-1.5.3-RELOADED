@@ -140,6 +140,13 @@ public class FileUtil {
                         continue;
                     }
 
+                    // Les natives LWJGL 3.3 rangent chaque architecture dans son dossier
+                    // (macos/x64, macos/arm64...). Sur Mac Apple Silicon, la version déclare
+                    // les deux : une fois remises à plat, l'une écrasait l'autre au hasard.
+                    if (!matchesNativeArchitecture(entryName)) {
+                        continue;
+                    }
+
                     File targetFile = new File(targetDir, entryName);
                     File parent = targetFile.getParentFile();
                     if (parent != null) {
@@ -284,6 +291,21 @@ public class FileUtil {
 
     private static boolean isArm64Architecture() {
         return OperatingSystem.isArm64Architecture();
+    }
+
+    /** Dossier d'architecture d'une native (x64, x86, arm64...) compatible avec le jeu ? Vrai s'il n'y en a pas. */
+    private static boolean matchesNativeArchitecture(String entryName) {
+        String wanted = isArm64Architecture() ? "arm64" : (Arch.CURRENT == Arch.x86 ? "x86" : "x64");
+        for (String segment : entryName.replace('\\', '/').split("/")) {
+            String s = segment.toLowerCase(Locale.ROOT);
+            if (s.equals("aarch64")) {
+                s = "arm64";
+            }
+            if (s.equals("x64") || s.equals("x86") || s.equals("arm64") || s.equals("arm32")) {
+                return s.equals(wanted);
+            }
+        }
+        return true;
     }
 	
 	
