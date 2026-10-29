@@ -175,7 +175,12 @@ public class GameVerifier {
 				|| lower.startsWith("shaderpacks" + File.separator)
 				|| lower.startsWith("server-resource-packs" + File.separator)
 				|| lower.startsWith("mods" + File.separator)
-				|| lower.startsWith("config" + File.separator);
+				|| lower.startsWith("config" + File.separator)
+				// Versions antérieures à la 1.6 : packs de textures, statistiques et ressources
+				|| lower.startsWith("texturepacks" + File.separator)
+				|| lower.startsWith("texturepacks-mp-cache" + File.separator)
+				|| lower.startsWith("stats" + File.separator)
+				|| lower.startsWith("resources" + File.separator);
 	}
 
 	private String stripFirstGameProfileSegment(String insideGame) {

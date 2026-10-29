@@ -372,7 +372,8 @@ public class GameRunner {
 	    pruneMissingValueOption(commands, "--xuid");
 	    pruneConflictingCollectorOptions(commands);
 
-	    Logger.log("Commande de lancement complète : " + String.join(" ", commands));
+	    // Jetons masqués : un journal transmis au support ne doit pas donner accès au compte
+	    Logger.log("Commande de lancement complète : " + String.join(" ", hideAccessToken(commands)));
 	    return commands;
 	}
 
@@ -396,9 +397,13 @@ public class GameRunner {
 	}
 
 	private boolean shouldPreferVersionMainClass() {
+		// Vanilla aussi : jusqu'à la 1.5.2, la classe principale est
+		// net.minecraft.launchwrapper.Launch, pas net.minecraft.client.main.Main.
 		return engine.getGameStyle().equals(GameStyle.FABRIC)
 				|| engine.getGameStyle().equals(GameStyle.QUILT)
-				|| engine.getGameStyle().equals(GameStyle.NEOFORGE);
+				|| engine.getGameStyle().equals(GameStyle.NEOFORGE)
+				|| engine.getGameStyle().equals(GameStyle.VANILLA)
+				|| engine.getGameStyle().equals(GameStyle.VANILLA_1_19_HIGHER);
 	}
 
 	private boolean shouldUseVersionJvmArguments() {
@@ -1607,11 +1612,35 @@ public class GameRunner {
 		map.put("assets_root", this.engine.getGameFolder().getAssetsDir().getAbsolutePath());
 		map.put("assets_index_name", this.engine.getMinecraftVersion().getAssets());
 		map.put("user_properties", "{}");
+		// Versions antérieures à la 1.7 (Classic, Alpha, Beta, 1.0 à 1.6.4). Pas de jeton : ces
+		// versions l'écrivent en clair dans leur journal ("Setting user: X, token:...") et les
+		// serveurs d'authentification qu'elles utilisaient n'existent plus.
+		map.put("auth_session", "-");
+		map.put("game_assets", resolveLegacyAssetsDirectory().getAbsolutePath());
 
 		for (int i = 0; i < split.length; i++)
 			split[i] = replaceLaunchPlaceholders(substitutor.replace(split[i]));
 
 		return split;
+	}
+
+	/**
+	 * Dossier des ressources lu par les anciennes versions (${game_assets}) : le dossier
+	 * "resources" du jeu pour l'index "pre-1.6", assets/virtual/legacy pour l'index "legacy"
+	 * (1.6.x), le dossier des assets sinon. Le GameUpdater y recopie les ressources.
+	 */
+	private File resolveLegacyAssetsDirectory() {
+		File assetsDir = this.engine.getGameFolder().getAssetsDir();
+		String name = this.engine.getMinecraftVersion().getAssets();
+		fr.trxyy.alternative.alternative_api.assets.AssetIndex index =
+				this.engine.getGameUpdater() != null ? this.engine.getGameUpdater().getAssetsList() : null;
+		if ((index != null && index.isMapToResources()) || "pre-1.6".equals(name)) {
+			return new File(this.resolveRuntimeGameDirectory(), "resources");
+		}
+		if ((index != null && index.isVirtual()) || "legacy".equals(name)) {
+			return new File(new File(assetsDir, "virtual"), name);
+		}
+		return assetsDir;
 	}
 
 	/**
@@ -1759,18 +1788,7 @@ public class GameRunner {
 	 * @return A List<String> of the token hidden
 	 */
 	public static List<String> hideAccessToken(String[] arguments) {
-        final ArrayList<String> output = new ArrayList<String>();
-        if (arguments == null) {
-            return output;
-        }
-        for (int i = 0; i < arguments.length; i++) {
-            if (i > 0 && Objects.equals(arguments[i-1], "--accessToken")) {
-                output.add("????????");
-            } else {
-                output.add(arguments[i]);
-            }
-        }
-        return output;
+        return hideAccessToken(arguments == null ? null : Arrays.asList(arguments));
     }
 
 	public static List<String> hideAccessToken(List<String> arguments) {
@@ -1779,7 +1797,11 @@ public class GameRunner {
             return output;
         }
         for (int i = 0; i < arguments.size(); i++) {
-            if (i > 0 && Objects.equals(arguments.get(i - 1), "--accessToken")) {
+            String previous = i > 0 ? arguments.get(i - 1) : null;
+            String current = arguments.get(i);
+            // --accessToken <jeton>, --session <jeton> (1.6) et "token:<jeton>:<uuid>" (avant 1.6)
+            if (Objects.equals(previous, "--accessToken") || Objects.equals(previous, "--session")
+                    || (current != null && current.startsWith("token:"))) {
                 output.add("????????");
             } else {
                 output.add(arguments.get(i));

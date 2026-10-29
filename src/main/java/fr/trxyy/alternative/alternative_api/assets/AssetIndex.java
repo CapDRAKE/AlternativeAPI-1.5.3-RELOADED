@@ -5,6 +5,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
+import com.google.gson.annotations.SerializedName;
+
 /**
  * @author Trxyy
  */
@@ -21,6 +23,11 @@ public class AssetIndex {
 	 * Is Virtual ?
 	 */
 	private boolean virtual;
+	/**
+	 * Index "pre-1.6" : ressources lues dans le dossier "resources" du jeu
+	 */
+	@SerializedName("map_to_resources")
+	private boolean mapToResources;
 
 	/**
 	 * The Constructor
@@ -48,6 +55,13 @@ public class AssetIndex {
 	 */
 	public boolean isVirtual() {
 		return this.virtual;
+	}
+
+	/**
+	 * @return If the assets must be copied to the game's "resources" folder (before 1.6)
+	 */
+	public boolean isMapToResources() {
+		return this.mapToResources;
 	}
 
 }

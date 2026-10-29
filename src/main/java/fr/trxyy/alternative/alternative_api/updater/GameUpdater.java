@@ -2283,7 +2283,38 @@ public class GameUpdater extends Thread {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
+        this.assetsList = assetsList;
+        placeLegacyAssets(assetsList);
+    }
 
+    /**
+     * Versions antérieures à la 1.7 : elles lisent les ressources par leur nom, pas par leur
+     * empreinte. Index "legacy" (1.6.x, virtual) : copie dans assets/virtual/legacy ; index
+     * "pre-1.6" (map_to_resources) : copie dans le dossier "resources" du jeu.
+     */
+    private void placeLegacyAssets(AssetIndex index) {
+        if (index == null || (!index.isVirtual() && !index.isMapToResources())) {
+            return;
+        }
+        File target = index.isMapToResources()
+                ? new File(GameProfilePaths.resolveRuntimeGameDirectory(this.engine), "resources")
+                : new File(new File(engine.getGameFolder().getAssetsDir(), "virtual"), minecraftVersion.getAssets());
+        int copied = 0;
+        for (Map.Entry<String, AssetObject> entry : index.getObjects().entrySet()) {
+            File source = getAsset(entry.getValue().getHash());
+            File dest = new File(target, entry.getKey());
+            if (!source.exists() || (dest.exists() && dest.length() == source.length())) {
+                continue;
+            }
+            try {
+                dest.getParentFile().mkdirs();
+                Files.copy(source.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                copied++;
+            } catch (IOException e) {
+                Logger.err("Ressource impossible a copier : " + entry.getKey() + " (" + e.getMessage() + ")");
+            }
+        }
+        Logger.log("Ressources des anciennes versions : " + target.getAbsolutePath() + " (" + copied + " copiee(s))");
     }
 
     /**
